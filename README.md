@@ -4,11 +4,11 @@
 [![Python Support](https://img.shields.io/pypi/pyversions/nemo-mqtt-plugin.svg)](https://pypi.org/project/nemo-mqtt-plugin/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Tool enables and disables are at the core of many labs that use NEMO. The status of a tool in critical for lab users to know. In many labs, the tool status is represented by either only the status on NEMO, or by a small red/green LED. The goal of this project was to have NEMO send an MQTT message to a display positioned on each tool, that can more throughly convey tool status, tool user, start time, previous user, etc.
+Knowing a tool’s status (interlock enabled or disabled) is critical in most labs using NEMO, but many setups only indicate this via NEMO itself or a simple LED. This project enables NEMO to send MQTT messages to displays on each tool, providing detailed, real-time status information such as current user, start time, and previous user.
 
 The hardware, firmware, and broker code associated with this project can be found at: https://github.com/alexanderenrique/NEMO-Tool-Display
 
-Django plugin that publishes NEMO tool usage events to MQTT (tool enable/disable, tool saves). Uses Redis as a buffer and a separate bridge process to keep broker connections out of Django.
+This is a Django plugin that publishes NEMO tool usage events to MQTT (tool enable/disable, tool saves). Uses Redis as a buffer and a separate bridge process to keep broker connections out of Django.
 
 ## Architecture
 
