@@ -7,7 +7,7 @@ name = "nemo-mqtt-plugin"
 version = "1.0.0"
 description = "MQTT integration plugin for NEMO tool usage events"
 readme = "README.md"
-license-files = ["LICEN[CS]E*"]
+
 authors = [
     {name = "Alex Denton", email = "alexdenton998@gmail.com"}
 ]
