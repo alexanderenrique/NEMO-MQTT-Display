@@ -8,10 +8,10 @@ From the NEMO project root directory:
 
 ```bash
 # Full MQTT + Redis monitoring
-python -m nemo_mqtt.monitoring.mqtt_monitor
+python -m NEMO_mqtt.monitoring.mqtt_monitor
 
 # Redis-only checking
-python -m nemo_mqtt.monitoring.redis_checker
+python -m NEMO_mqtt.monitoring.redis_checker
 ```
 
 To generate test traffic, enable or disable a tool in the NEMO web interface; the monitor will show the corresponding Redis and MQTT messages.
@@ -19,9 +19,9 @@ To generate test traffic, enable or disable a tool in the NEMO web interface; th
 Or use the run_monitor runner (requires manage.py in cwd):
 
 ```bash
-python -m nemo_mqtt.monitoring.run_monitor mqtt
-python -m nemo_mqtt.monitoring.run_monitor redis
-python -m nemo_mqtt.monitoring.run_monitor test
+python -m NEMO_mqtt.monitoring.run_monitor mqtt
+python -m NEMO_mqtt.monitoring.run_monitor redis
+python -m NEMO_mqtt.monitoring.run_monitor test
 ```
 
 The `test` option runs `manage.py test_mqtt_api` if that management command exists in your NEMO project; otherwise use the NEMO UI to enable/disable tools and watch the monitor.
@@ -40,7 +40,7 @@ The plugin’s web dashboard at **`/mqtt/monitor/`** shows a **stream of what NE
 
 ### Full MQTT Monitor
 ```bash
-python -m nemo_mqtt.monitoring.mqtt_monitor
+python -m NEMO_mqtt.monitoring.mqtt_monitor
 ```
 - Connects to Redis (db=1, same as the plugin) and the MQTT broker
 - Subscribes to all `nemo/#` topics
@@ -51,7 +51,7 @@ python -m nemo_mqtt.monitoring.mqtt_monitor
 
 ### Redis Checker
 ```bash
-python -m nemo_mqtt.monitoring.redis_checker
+python -m NEMO_mqtt.monitoring.redis_checker
 ```
 - Connects to Redis only (db=1, same as the plugin)
 - Shows current message count
@@ -114,7 +114,7 @@ All of these are emitted from the same **UsageEvent** handler, so you get consis
 
 1. **Start monitoring**:
    ```bash
-   python -m nemo_mqtt.monitoring.mqtt_monitor
+   python -m NEMO_mqtt.monitoring.mqtt_monitor
    ```
 
 2. **Enable/disable a tool** in the NEMO web interface (e.g. “Enable” to start use, “Disable” / “Stop” to end use).
@@ -144,7 +144,7 @@ If you don't see messages:
 
 1. **Check Redis**: `redis-cli ping`
 2. **Check MQTT broker**: `lsof -i :1883`
-3. **Check Redis-MQTT Bridge service**: `pgrep -f redis_mqtt_bridge` or `python -m nemo_mqtt.redis_mqtt_bridge`
+3. **Check Redis-MQTT Bridge service**: `pgrep -f redis_mqtt_bridge` or `python -m NEMO_mqtt.redis_mqtt_bridge`
 4. **Check Django logs** for signal handler errors
 5. **Verify MQTT plugin is enabled** in Django settings
 

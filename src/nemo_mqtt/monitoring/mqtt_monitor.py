@@ -6,7 +6,7 @@ This script monitors both Redis and MQTT messages to help debug the MQTT plugin.
 Run it from your NEMO project root with a valid DJANGO_SETTINGS_MODULE, for example:
 
     export DJANGO_SETTINGS_MODULE=settings_dev  # or your NEMO settings module
-    python -m nemo_mqtt.monitoring.mqtt_monitor
+    python -m NEMO_mqtt.monitoring.mqtt_monitor
 """
 
 import os

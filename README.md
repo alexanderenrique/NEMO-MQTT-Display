@@ -29,19 +29,19 @@ Configuration is stored in Django (e.g. `/customization/mqtt/`) and loaded by th
 
 **Prerequisites:** Python 3.8+, Django 3.2+, NEMO-CE 4.0+, Redis, MQTT broker (e.g. Mosquitto).
 
-**Simplified deployment:** If you use the package with the main folder named `src/NEMO_mqtt` (capital NEMO), NEMO will automatically add the plugin URLs to its main `urls.py`, so no manual URL wiring is needed and installation is easier.
+**Simplified deployment:** The plugin package is `NEMO_mqtt` (capitalized). Add `'NEMO_mqtt'` to `INSTALLED_APPS`, then run `python manage.py setup_nemo_integration` (use `--write-urls` to add the URL include to `NEMO/urls.py`) and `python manage.py migrate nemo_mqtt`.
 
 ### From PyPI (recommended)
 
 ```bash
 pip install nemo-mqtt-plugin
 cd /path/to/your/nemo-ce
-# Add 'nemo_mqtt' to INSTALLED_APPS in your settings (see Manual below).
+# Add 'NEMO_mqtt' to INSTALLED_APPS in your settings (see Manual below).
 python manage.py setup_nemo_integration
 python manage.py migrate nemo_mqtt
 ```
 
-**Local / testing:** The command above only modifies `NEMO/urls.py` (adds the MQTT URL include). Add `nemo_mqtt` to `INSTALLED_APPS` and any logging config yourself.
+**Local / testing:** The command above only prints integration steps (no file changes). Add `NEMO_mqtt` to `INSTALLED_APPS` and any logging config yourself. Use `--write-urls` to add the MQTT URL include to `NEMO/urls.py`.
 
 **Production with GitLab/Ansible:** If your config is in version control and deployed by GitLab or Ansible, run with `--gitlab` so no files are changed on the server; the command will print the snippets to add to your repo:
 
@@ -54,9 +54,9 @@ python manage.py migrate nemo_mqtt
 ### Manual
 
 1. `pip install nemo-mqtt-plugin`
-2. Add `'nemo_mqtt'` to `INSTALLED_APPS` in your settings.
-3. (Optional) If you use Django’s `LOGGING` setting, add a `nemo_mqtt` logger with your preferred level and handlers (e.g. DEBUG in dev/test, INFO or WARNING in production). What and how you log is installation-dependent.
-4. With the app named `nemo_mqtt`, NEMO can auto-add the plugin URLs; run `python manage.py setup_nemo_integration` to add them, or add `path("mqtt/", include("nemo_mqtt.urls"))` to `NEMO/urls.py` yourself.
+2. Add `'NEMO_mqtt'` to `INSTALLED_APPS` in your settings.
+3. (Optional) If you use Django’s `LOGGING` setting, add a `NEMO_mqtt` logger with your preferred level and handlers (e.g. DEBUG in dev/test, INFO or WARNING in production). What and how you log is installation-dependent.
+4. run `python manage.py setup_nemo_integration` to print integration steps, or add `path("mqtt/", include("NEMO_mqtt.urls"))` to `NEMO/urls.py` yourself. Use `--write-urls` to have the command add the URL include.
 5. Run `python manage.py migrate nemo_mqtt`.
 
 ### After install

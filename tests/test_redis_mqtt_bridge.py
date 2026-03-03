@@ -310,7 +310,7 @@ class RedisMQTTBridgeIntegrationGuideTest(TestCase):
         Integration Testing Steps:
         
         1. Start bridge in AUTO mode:
-           $ python nemo_mqtt/redis_mqtt_bridge.py --auto
+           $ python -m NEMO_mqtt.redis_mqtt_bridge --auto
         
         2. In another terminal, connect a test subscriber:
            $ mosquitto_sub -h localhost -p 1883 -t 'nemo/#' -v

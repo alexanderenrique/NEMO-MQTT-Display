@@ -115,7 +115,7 @@ start_mqtt_service() {
     else
         # Start as background process
         cd /opt/nemo || cd "$(dirname "$(dirname "$0")")"
-        nohup python -m nemo_mqtt.redis_mqtt_bridge > /dev/null 2>&1 &
+        nohup python -m NEMO_mqtt.redis_mqtt_bridge > /dev/null 2>&1 &
     fi
     
     sleep 2

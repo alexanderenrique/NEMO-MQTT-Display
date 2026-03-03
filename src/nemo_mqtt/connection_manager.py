@@ -110,7 +110,7 @@ class ConnectionManager:
 
                 # Calculate backoff with jitter
                 delay = self._calculate_backoff()
-                logger.warning(
+                logger.debug(
                     f"Connection attempt {self.retry_count} failed: {e}. "
                     f"Circuit state: {self.circuit_state.value}. "
                     f"Retrying in {delay:.1f}s"
@@ -161,7 +161,7 @@ class ConnectionManager:
         # Open circuit breaker after too many failures
         if self.failure_count >= self.failure_threshold:
             if self.circuit_state != CircuitState.OPEN:
-                logger.warning(
+                logger.debug(
                     f"Circuit breaker entering OPEN state after {self.failure_count} failures"
                 )
                 self.circuit_state = CircuitState.OPEN

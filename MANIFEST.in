@@ -2,8 +2,8 @@ include README.md
 include LICENSE
 include CHANGELOG.md
 include pyproject.toml
-recursive-include src/nemo_mqtt/templates *
-recursive-include src/nemo_mqtt/migrations *
+recursive-include src/NEMO_mqtt/templates *
+recursive-include src/NEMO_mqtt/migrations *
 global-exclude *.pyc
 global-exclude __pycache__
 global-exclude .git*

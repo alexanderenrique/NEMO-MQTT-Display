@@ -1,1 +1,1 @@
-# Django management commands for nemo_mqtt
+# Django management commands for NEMO_mqtt

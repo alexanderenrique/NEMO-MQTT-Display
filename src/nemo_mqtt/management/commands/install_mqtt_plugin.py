@@ -23,6 +23,11 @@ class Command(BaseCommand):
             action="store_true",
             help="Production/GitLab mode: do not modify config files; print snippets for your repo.",
         )
+        parser.add_argument(
+            "--write-urls",
+            action="store_true",
+            help="Write MQTT URL include to NEMO/urls.py (see setup_nemo_integration --write-urls).",
+        )
 
     def handle(self, *args, **options):
         call_command(
@@ -30,4 +35,5 @@ class Command(BaseCommand):
             install_package=True,
             backup=options["backup"],
             gitlab=options["gitlab"],
+            write_urls=options["write_urls"],
         )

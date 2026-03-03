@@ -6,7 +6,7 @@ This script checks for messages in Redis and shows recent activity.
 Run it from your NEMO project root with a valid DJANGO_SETTINGS_MODULE, for example:
 
     export DJANGO_SETTINGS_MODULE=settings_dev  # or your NEMO settings module
-    python -m nemo_mqtt.monitoring.redis_checker
+    python -m NEMO_mqtt.monitoring.redis_checker
 """
 
 import os

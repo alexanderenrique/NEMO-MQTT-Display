@@ -38,12 +38,18 @@ class Command(BaseCommand):
             action="store_true",
             help="Production/GitLab mode: do not modify files; print config snippets to add to your version-controlled repo.",
         )
+        parser.add_argument(
+            "--write-urls",
+            action="store_true",
+            help="Write MQTT URL include to NEMO/urls.py. If not set, only print instructions (no file changes).",
+        )
 
     def handle(self, *args, **options):
         nemo_path = options.get("nemo_path") or os.getcwd()
         create_backup = options.get("backup", False)
         install_package = options.get("install_package", False)
         gitlab_mode = options.get("gitlab", False)
+        write_urls = options.get("write_urls", False)
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -54,23 +60,28 @@ class Command(BaseCommand):
         if install_package:
             self._install_package()
 
-        # Check if we're in a NEMO installation (skip for gitlab if path is default)
-        if not self._is_nemo_installation(nemo_path) and not gitlab_mode:
+        # Check if we're in a NEMO installation (only required when writing urls)
+        if not self._is_nemo_installation(nemo_path) and not gitlab_mode and write_urls:
             raise CommandError(f"{nemo_path} does not appear to be a NEMO installation")
 
         if gitlab_mode:
             self._print_gitlab_instructions()
             return
 
+        # By default only print instructions; write urls only when --write-urls is set
+        self._print_integration_instructions()
+
         success_count = 0
-
-        # Configure URLs only (INSTALLED_APPS and LOGGING are configured manually)
-        if self._configure_urls(nemo_path, create_backup):
-            success_count += 1
-
-        self.stdout.write(
-            self.style.SUCCESS(f"\nSetup complete! Modified {success_count} files.")
-        )
+        if write_urls:
+            if self._configure_urls(nemo_path, create_backup):
+                success_count += 1
+            self.stdout.write(
+                self.style.SUCCESS(f"\nModified {success_count} file(s).")
+            )
+        else:
+            self.stdout.write(
+                self.style.NOTICE("\nNo files were modified. Add the snippets above to your project, or run with --write-urls to add the URL include to NEMO/urls.py.")
+            )
 
         self.stdout.write("\nNext steps:")
         self.stdout.write("1. Add 'NEMO_mqtt' to INSTALLED_APPS in your settings if not already present.")
@@ -104,7 +115,15 @@ class Command(BaseCommand):
         self.stdout.write(
             "Add the following to your NEMO repo and deploy via GitLab/Ansible.\n"
         )
+        self._print_integration_instructions()
 
+        self.stdout.write(self.style.SUCCESS("\nNext steps:"))
+        self.stdout.write("  • Commit and push the changes, then deploy to the server.")
+        self.stdout.write("  • On the server after deploy: python manage.py migrate nemo_mqtt")
+        self.stdout.write("  • Configure MQTT at /customization/mqtt/\n")
+
+    def _print_integration_instructions(self):
+        """Print INSTALLED_APPS, LOGGING, and urls.py snippets (no file changes)."""
         self.stdout.write(self.style.SUCCESS("\n1. In settings (e.g. settings.py or settings_prod.py), add to INSTALLED_APPS:"))
         self.stdout.write("""
     'NEMO_mqtt',
@@ -118,11 +137,6 @@ class Command(BaseCommand):
     path("mqtt/", include("NEMO_mqtt.urls")),
 """)
         self.stdout.write("   (inside urlpatterns, or use: urlpatterns += [ path(...), ])\n")
-
-        self.stdout.write(self.style.SUCCESS("\nNext steps:"))
-        self.stdout.write("  • Commit and push the changes, then deploy to the server.")
-        self.stdout.write("  • On the server after deploy: python manage.py migrate nemo_mqtt")
-        self.stdout.write("  • Configure MQTT at /customization/mqtt/\n")
 
     def _is_nemo_installation(self, path):
         """Check if the path contains a NEMO installation"""
