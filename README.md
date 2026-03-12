@@ -1,4 +1,4 @@
-# NEMO MQTT Bridge
+# NEMO_mqtt_bridge
 
 [![PyPI version](https://badge.fury.io/py/nemo-mqtt-bridge.svg)](https://badge.fury.io/py/nemo-mqtt-bridge)
 [![Python Support](https://img.shields.io/pypi/pyversions/nemo-mqtt-bridge.svg)](https://pypi.org/project/nemo-mqtt-bridge/)

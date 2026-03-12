@@ -1,5 +1,5 @@
 """
-Django test settings for NEMO MQTT Bridge plugin
+Django test settings for NEMO_mqtt_bridge plugin
 """
 import os
 

@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 EVENTS_LIST_KEY = "nemo_mqtt_events"
 MONITOR_LIST_KEY = "nemo_mqtt_monitor"
 MONITOR_LIST_MAXLEN = 100
-BRIDGE_CONTROL_KEY = "nemo_mqtt_bridge_control"
-BRIDGE_STATUS_KEY = "nemo_mqtt_bridge_status"
+BRIDGE_CONTROL_KEY = "NEMO_mqtt_bridge_control"
+BRIDGE_STATUS_KEY = "NEMO_mqtt_bridge_status"
 BRIDGE_STATUS_TTL = 90  # seconds; if bridge dies, status expires
 
 

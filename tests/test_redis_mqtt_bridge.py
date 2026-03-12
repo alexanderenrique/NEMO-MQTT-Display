@@ -117,11 +117,11 @@ class RedisMQTTBridgeLockingTest(TestCase):
     
     def test_lock_file_path(self):
         """Test lock file is in correct location"""
-        lock_path = os.path.join(tempfile.gettempdir(), 'nemo_mqtt_bridge.lock')
+        lock_path = os.path.join(tempfile.gettempdir(), 'NEMO_mqtt_bridge.lock')
         
         # Lock path should be in temp directory
         self.assertTrue(lock_path.startswith(tempfile.gettempdir()))
-        self.assertTrue(lock_path.endswith('nemo_mqtt_bridge.lock'))
+        self.assertTrue(lock_path.endswith('NEMO_mqtt_bridge.lock'))
     
     def test_lock_file_prevents_multiple_instances(self):
         """Document that lock file prevents multiple instances"""

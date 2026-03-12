@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.2] - 2026-03-05
+
+- Standardized project name to **NEMO_mqtt_bridge** everywhere:
+  - Lock file: `nemo_mqtt_bridge.lock` → `NEMO_mqtt_bridge.lock` (process lock, tests, cleanup script).
+  - Bridge Redis keys: `nemo_mqtt_bridge_control` and `nemo_mqtt_bridge_status` → `NEMO_mqtt_bridge_control` and `NEMO_mqtt_bridge_status`.
+  - All display and prose references (README, test settings, CHANGELOG, package docstring, monitoring README) now use `NEMO_mqtt_bridge` instead of "NEMO MQTT Bridge" or lowercase variants.
+
 ## [1.0.1] - 2026-03-03
 
 - Standardized use of "NEMO" with capital letters throughout documentation and config files.
@@ -12,7 +19,7 @@ All notable changes to this project will be documented in this file.
 
 ## [1.0.0] - 2026-02-27
 
-- Initial public release of the NEMO MQTT Bridge plugin.
+- Initial public release of the NEMO_mqtt_bridge plugin.
 - Full MQTT integration for NEMO tool, area, reservation, and usage events.
 - Redis–MQTT bridge architecture for reliable event delivery.
 - Web-based monitoring dashboard at `/mqtt/monitor/`.

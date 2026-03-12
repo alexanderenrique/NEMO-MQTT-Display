@@ -17,7 +17,7 @@ else
 fi
 
 # Remove lock file
-lock_file="/tmp/nemo_mqtt_bridge.lock"
+lock_file="/tmp/NEMO_mqtt_bridge.lock"
 if [ -f "$lock_file" ]; then
     echo "Removing lock file: $lock_file"
     rm -f "$lock_file"

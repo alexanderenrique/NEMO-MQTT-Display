@@ -1,6 +1,6 @@
 # MQTT Bridge Monitoring Tools
 
-This directory contains monitoring and debugging tools for the NEMO MQTT Bridge plugin.
+This directory contains monitoring and debugging tools for the NEMO_mqtt_bridge plugin.
 
 ## Quick Start
 

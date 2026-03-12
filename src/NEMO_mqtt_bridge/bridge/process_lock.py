@@ -10,7 +10,7 @@ import time
 
 logger = logging.getLogger(__name__)
 
-LOCK_PATH = os.path.join(tempfile.gettempdir(), "nemo_mqtt_bridge.lock")
+LOCK_PATH = os.path.join(tempfile.gettempdir(), "NEMO_mqtt_bridge.lock")
 
 
 def acquire_lock():
