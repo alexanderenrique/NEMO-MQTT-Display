@@ -3,13 +3,18 @@
 Test script to generate MQTT messages for testing the monitor
 """
 
+import logging
 import redis
 import json
 import time
 from datetime import datetime
 
+logger = logging.getLogger(__name__)
+
+
 def test_redis_messages():
     """Generate test messages in Redis"""
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     try:
         # Connect to Redis
         redis_client = redis.Redis(
@@ -19,8 +24,8 @@ def test_redis_messages():
             decode_responses=True
         )
         redis_client.ping()
-        print("✅ Connected to Redis")
-        
+        logger.info("Connected to Redis")
+
         # Generate test messages
         test_messages = [
             {
@@ -45,21 +50,21 @@ def test_redis_messages():
                 'retain': True
             }
         ]
-        
+
         # Push messages to Redis
         for i, msg in enumerate(test_messages):
             redis_client.lpush('nemo_mqtt_events', json.dumps(msg))
-            print(f"📨 Pushed message {i+1}: {msg['topic']}")
+            logger.info("Pushed message %s: %s", i + 1, msg['topic'])
             time.sleep(0.5)
-        
-        print(f"✅ Generated {len(test_messages)} test messages in Redis")
-        
+
+        logger.info("Generated %s test messages in Redis", len(test_messages))
+
         # Check how many messages are in Redis
         count = redis_client.llen('nemo_mqtt_events')
-        print(f"📊 Total messages in Redis: {count}")
-        
+        logger.info("Total messages in Redis: %s", count)
+
     except Exception as e:
-        print(f"❌ Error: {e}")
+        logger.error("Error: %s", e)
 
 if __name__ == "__main__":
     test_redis_messages()

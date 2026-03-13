@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("nemo_mqtt", "0006_rename_db_tables_to_lowercase"),
+        ("NEMO_mqtt_bridge", "0006_rename_db_tables_to_lowercase"),
     ]
 
     operations = [

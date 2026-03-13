@@ -44,7 +44,7 @@ def rename_tables_reverse(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("nemo_mqtt", "0005_simplify_tls_config"),
+        ("NEMO_mqtt_bridge", "0005_simplify_tls_config"),
     ]
 
     operations = [

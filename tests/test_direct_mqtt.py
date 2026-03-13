@@ -4,34 +4,41 @@ Direct MQTT Test
 Publishes test messages directly to MQTT broker to test monitor reception
 """
 
+import logging
 import paho.mqtt.client as mqtt
 import json
 import time
 import uuid
 
+logger = logging.getLogger(__name__)
+
+
 def on_connect(client, userdata, flags, rc):
-    print(f"Connected with result code {rc}")
+    logger.info("Connected with result code %s", rc)
     if rc == 0:
-        print("✅ Connected to MQTT broker")
+        logger.info("Connected to MQTT broker")
+
 
 def on_publish(client, userdata, mid):
-    print(f"✅ Message {mid} published successfully")
+    logger.info("Message %s published successfully", mid)
+
 
 def main():
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     # Create MQTT client
     client = mqtt.Client()
     client.on_connect = on_connect
     client.on_publish = on_publish
-    
+
     try:
         # Connect to broker
-        print("🔍 Connecting to MQTT broker...")
+        logger.info("Connecting to MQTT broker...")
         client.connect('localhost', 1883, 60)
         client.loop_start()
-        
+
         # Wait for connection
         time.sleep(1)
-        
+
         # Publish test messages
         test_messages = [
             {
@@ -79,33 +86,33 @@ def main():
                 "timestamp": False
             }
         ]
-        
-        print(f"📤 Publishing {len(test_messages)} test messages...")
-        
+
+        logger.info("Publishing %s test messages...", len(test_messages))
+
         for i, message in enumerate(test_messages, 1):
             topic = f"nemo/tools/test_tool/{'start' if message['event'] == 'tool_usage_start' else 'end'}"
             payload = json.dumps(message)
-            
-            print(f"📤 Publishing message {i}/{len(test_messages)}")
-            print(f"   Topic: {topic}")
-            print(f"   Payload: {payload[:100]}...")
-            
+
+            logger.info("Publishing message %s/%s", i, len(test_messages))
+            logger.info("   Topic: %s", topic)
+            logger.info("   Payload: %s...", payload[:100])
+
             result = client.publish(topic, payload, qos=0, retain=False)
-            print(f"   Result: {result.rc} (mid: {result.mid})")
-            
+            logger.info("   Result: %s (mid: %s)", result.rc, result.mid)
+
             # Small delay between messages
             time.sleep(0.5)
-        
-        print("✅ All test messages published")
-        print("🔍 Waiting 2 seconds for delivery...")
+
+        logger.info("All test messages published")
+        logger.info("Waiting 2 seconds for delivery...")
         time.sleep(2)
-        
+
     except Exception as e:
-        print(f"❌ Error: {e}")
+        logger.error("Error: %s", e)
     finally:
         client.loop_stop()
         client.disconnect()
-        print("👋 Disconnected from MQTT broker")
+        logger.info("Disconnected from MQTT broker")
 
 if __name__ == "__main__":
     main()

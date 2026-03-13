@@ -2,23 +2,26 @@
 MQTT Plugin Customization for NEMO.
 """
 
+import logging
+
 from NEMO.decorators import customization
 from NEMO.views.customization import CustomizationBase
 from .models import MQTTConfiguration, MQTTMessageLog, MQTTEventFilter
 
+logger = logging.getLogger(__name__)
 
-def _print_config_to_terminal(
+
+def _log_config(
     config, broker_password: bool = False, hmac_key_set: bool = False
 ) -> None:
-    """Print current MQTT configuration to stdout for verification (sensitive values masked).
+    """Log current MQTT configuration (sensitive values masked).
 
-    The actual broker password and HMAC secret key are never printed; only whether they are set.
+    The actual broker password and HMAC secret key are never logged; only whether they are set.
     """
     password_display = "***" if config.password else "(not set)"
     hmac_display = "***" if config.hmac_secret_key else "(not set)"
     lines = [
-        "",
-        "--- MQTT configuration saved ---",
+        "MQTT configuration saved",
         f"  name: {config.name}",
         f"  enabled: {config.enabled}",
         f"  broker_host: {config.broker_host}",
@@ -39,10 +42,9 @@ def _print_config_to_terminal(
         f"  max_reconnect_attempts: {config.max_reconnect_attempts}",
         f"  log_messages: {config.log_messages}",
         f"  log_level: {config.log_level}",
-        "--------------------------------",
-        "",
     ]
-    print("\n".join(lines))
+    for line in lines:
+        logger.info(line)
 
 
 @customization("mqtt", "MQTT Plugin")
@@ -163,8 +165,8 @@ class MQTTCustomization(CustomizationBase):
 
         messages.success(request, "MQTT configuration saved successfully!")
 
-        # Display configuration in terminal for verification (sensitive fields masked)
-        _print_config_to_terminal(
+        # Display configuration via logging (sensitive fields masked)
+        _log_config(
             config, broker_password=bool(broker_password), hmac_key_set=bool(hmac_key)
         )
 

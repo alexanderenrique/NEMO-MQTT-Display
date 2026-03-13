@@ -4,9 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nemo-mqtt-bridge"
-version = "1.0.2"
+version = "1.0.3"
 description = "MQTT integration plugin for NEMO tool usage events"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
 
 authors = [
     {name = "Alex Denton", email = "alexdenton998@gmail.com"}
@@ -17,7 +19,6 @@ maintainers = [
 keywords = ["nemo", "mqtt", "django", "plugin", "iot", "real-time", "monitoring"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
-    "License :: OSI Approved :: MIT License",
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
@@ -42,6 +43,7 @@ dependencies = [
     "paho-mqtt>=1.6.1",
     "Django>=3.2",
     "redis>=4.0",
+    "redis-wheel>=6.2.5; sys_platform != 'win32'",
 ]
 
 [project.optional-dependencies]

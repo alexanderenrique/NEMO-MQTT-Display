@@ -8,7 +8,10 @@ import os
 import sys
 import subprocess
 import argparse
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def find_venv():
@@ -43,7 +46,7 @@ def run_script(script_name, args=None):
     script_path = script_dir / script_name
 
     if not script_path.exists():
-        print(f"[ERROR] Script not found: {script_path}")
+        logger.error("Script not found: %s", script_path)
         return False
 
     python_exe = get_python_executable()
@@ -53,21 +56,25 @@ def run_script(script_name, args=None):
     if args:
         cmd.extend(args)
 
-    print(f"Running: {' '.join(cmd)}")
-    print("=" * 60)
+    logger.info("Running: %s", " ".join(cmd))
+    logger.info("=" * 60)
 
     try:
         result = subprocess.run(cmd, cwd=Path.cwd())
         return result.returncode == 0
     except KeyboardInterrupt:
-        print("\nInterrupted by user")
+        logger.info("Interrupted by user")
         return True
     except Exception as e:
-        print(f"[ERROR] Error running script: {e}")
+        logger.error("Error running script: %s", e)
         return False
 
 
 def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(levelname)s: %(message)s",
+    )
     parser = argparse.ArgumentParser(description="MQTT Monitoring Tools")
     parser.add_argument(
         "tool",
@@ -80,23 +87,22 @@ def main():
 
     args = parser.parse_args()
 
-    print("MQTT Plugin Monitoring Tools")
-    print("=" * 40)
+    logger.info("MQTT Plugin Monitoring Tools")
+    logger.info("=" * 40)
 
     # Check if we're in the right directory
     if not (Path.cwd() / "manage.py").exists():
-        print("[ERROR] Please run this script from the NEMO project root directory")
+        logger.error("Please run this script from the NEMO project root directory")
         return 1
 
     # Find and display Python environment
     venv_path = find_venv()
     if venv_path:
-        print(f"[OK] Using virtual environment: {venv_path}")
+        logger.info("Using virtual environment: %s", venv_path)
     else:
-        print("WARNING: No virtual environment found, using system Python")
+        logger.warning("No virtual environment found, using system Python")
 
-    print(f"Python executable: {get_python_executable()}")
-    print()
+    logger.info("Python executable: %s", get_python_executable())
 
     # Run the appropriate tool
     if args.tool == "mqtt":
@@ -108,19 +114,19 @@ def main():
         cmd = [python_exe, "manage.py", "test_mqtt_api"]
         if args.args:
             cmd.extend(args.args)
-        print(f"Running: {' '.join(cmd)}")
-        print("=" * 60)
+        logger.info("Running: %s", " ".join(cmd))
+        logger.info("=" * 60)
         try:
             result = subprocess.run(cmd, cwd=Path.cwd())
             success = result.returncode == 0
         except KeyboardInterrupt:
-            print("\nInterrupted by user")
+            logger.info("Interrupted by user")
             success = True
         except Exception as e:
-            print(f"[ERROR] Error: {e}")
+            logger.error("Error: %s", e)
             success = False
     else:
-        print(f"[ERROR] Unknown tool: {args.tool}")
+        logger.error("Unknown tool: %s", args.tool)
         return 1
 
     return 0 if success else 1

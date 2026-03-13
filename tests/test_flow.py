@@ -4,23 +4,28 @@ Test the complete MQTT flow
 Django signals → Redis → MQTT Publisher → MQTT Broker → Monitor
 """
 
+import logging
 import redis
 import json
 import time
 
+logger = logging.getLogger(__name__)
+
+
 def test_complete_flow():
-    print("🧪 Testing Complete MQTT Flow")
-    print("=" * 50)
-    
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    logger.info("Testing Complete MQTT Flow")
+    logger.info("=" * 50)
+
     # Connect to Redis
     try:
         redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
         redis_client.ping()
-        print("✅ Connected to Redis")
+        logger.info("Connected to Redis")
     except Exception as e:
-        print(f"❌ Redis connection failed: {e}")
+        logger.error("Redis connection failed: %s", e)
         return
-    
+
     # Create a test message (simulating what Django signals do)
     test_message = {
         "topic": "nemo/tools/test_tool/start",
@@ -39,30 +44,30 @@ def test_complete_flow():
         "retain": False,
         "timestamp": time.time()
     }
-    
-    print(f"📤 Publishing test message to Redis...")
-    print(f"   Topic: {test_message['topic']}")
-    print(f"   Payload: {test_message['payload']}")
-    
+
+    logger.info("Publishing test message to Redis...")
+    logger.info("   Topic: %s", test_message['topic'])
+    logger.info("   Payload: %s", test_message['payload'])
+
     # Publish to Redis (this is what Django signals do)
     result = redis_client.lpush('nemo_mqtt_events', json.dumps(test_message))
-    print(f"✅ Published to Redis (list length: {result})")
-    
+    logger.info("Published to Redis (list length: %s)", result)
+
     # Wait a moment for the standalone service to process it
-    print("⏳ Waiting for standalone service to process...")
+    logger.info("Waiting for standalone service to process...")
     time.sleep(2)
-    
+
     # Check if Redis list is empty (meaning it was consumed)
     list_length = redis_client.llen('nemo_mqtt_events')
-    print(f"📊 Redis list length after processing: {list_length}")
-    
+    logger.info("Redis list length after processing: %s", list_length)
+
     if list_length == 0:
-        print("✅ Message was consumed by standalone service")
-        print("📡 Check your MQTT monitor to see if the message was published to MQTT")
+        logger.info("Message was consumed by standalone service")
+        logger.info("Check your MQTT monitor to see if the message was published to MQTT")
     else:
-        print("❌ Message was not consumed by standalone service")
-    
-    print("=" * 50)
+        logger.error("Message was not consumed by standalone service")
+
+    logger.info("=" * 50)
 
 if __name__ == "__main__":
     test_complete_flow()

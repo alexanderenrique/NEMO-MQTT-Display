@@ -2,12 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+
+## [1.0.3] - 2026-03-13
+
+- Aligned Django app label with package name to fix migration mismatch:
+  - App label changed from `nemo_mqtt` to `NEMO_mqtt_bridge` to match `INSTALLED_APPS`.
+  - Use `python manage.py migrate NEMO_mqtt_bridge` (not `nemo_mqtt`).
+  - Added migration 0010 to rename tables from `nemo_mqtt_bridge_*` to `nemo_mqtt_*` for consistency with model `db_table` values.
+  - Updated admin URLs and documentation.
+  - **Upgrade from &lt; 1.0.3:** If you previously ran migrations with `nemo_mqtt`, run: `UPDATE django_migrations SET app = 'NEMO_mqtt_bridge' WHERE app = 'nemo_mqtt';` before or after upgrading.
+  - **redis-wheel integration** for Docker and containerized deployments:
+  - Added `redis-wheel>=6.2.5` as an optional dependency (manylinux, macOS; excluded on Windows).
+  - When installed, the plugin uses the bundled Redis binary instead of requiring a system `redis-server`.
+  - Enables running the plugin in a single container without a Redis sidecar or pre-installed Redis.
+  - Falls back to system `redis-server` when redis-wheel is not available.
+  - Improved startup timing: 1.5 s delay after spawning Redis before connection attempts; 15 s total wait window.
+
 ## [1.0.2] - 2026-03-05
 
 - Standardized project name to **NEMO_mqtt_bridge** everywhere:
   - Lock file: `nemo_mqtt_bridge.lock` → `NEMO_mqtt_bridge.lock` (process lock, tests, cleanup script).
   - Bridge Redis keys: `nemo_mqtt_bridge_control` and `nemo_mqtt_bridge_status` → `NEMO_mqtt_bridge_control` and `NEMO_mqtt_bridge_status`.
   - All display and prose references (README, test settings, CHANGELOG, package docstring, monitoring README) now use `NEMO_mqtt_bridge` instead of "NEMO MQTT Bridge" or lowercase variants.
+  - Removed terminal outputs, everything goes to log
 
 ## [1.0.1] - 2026-03-03
 

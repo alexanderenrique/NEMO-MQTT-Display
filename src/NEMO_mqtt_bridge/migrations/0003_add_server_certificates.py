@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("nemo_mqtt", "0002_mqttconfiguration_ca_cert_content_and_more"),
+        ("NEMO_mqtt_bridge", "0002_mqttconfiguration_ca_cert_content_and_more"),
     ]
 
     operations = [

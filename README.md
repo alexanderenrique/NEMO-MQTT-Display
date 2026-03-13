@@ -29,7 +29,7 @@ Configuration is stored in Django (e.g. `/customization/mqtt/`) and loaded by th
 
 **Prerequisites:** Python 3.8+, Django 3.2+, NEMO-CE 4.0+, Redis, MQTT broker (e.g. Mosquitto).
 
-**Simplified deployment:** The plugin package is `NEMO_mqtt_bridge`. Add `'NEMO_mqtt_bridge'` to `INSTALLED_APPS`, then run `python manage.py setup_nemo_integration` (use `--write-urls` to add the URL include to `NEMO/urls.py`) and `python manage.py migrate nemo_mqtt`.
+**Simplified deployment:** The plugin package is `NEMO_mqtt_bridge`. Add `'NEMO_mqtt_bridge'` to `INSTALLED_APPS`, then run `python manage.py setup_nemo_integration` (use `--write-urls` to add the URL include to `NEMO/urls.py`) and `python manage.py migrate NEMO_mqtt_bridge`.
 
 ### From PyPI (recommended)
 
@@ -38,7 +38,7 @@ pip install nemo-mqtt-bridge
 cd /path/to/your/nemo-ce
 # Add 'NEMO_mqtt_bridge' to INSTALLED_APPS in your settings (see Manual below).
 python manage.py setup_nemo_integration
-python manage.py migrate nemo_mqtt
+python manage.py migrate NEMO_mqtt_bridge
 ```
 
 **Local / testing:** The command above only prints integration steps (no file changes). Add `NEMO_mqtt_bridge` to `INSTALLED_APPS` and any logging config yourself. Use `--write-urls` to add the MQTT URL include to `NEMO/urls.py`.
@@ -48,7 +48,7 @@ python manage.py migrate nemo_mqtt
 ```bash
 python manage.py setup_nemo_integration --gitlab
 # Add the printed snippets to your repo (INSTALLED_APPS and URLs; configure logging as needed for your environment), commit, and deploy. Then on the server:
-python manage.py migrate nemo_mqtt
+python manage.py migrate NEMO_mqtt_bridge
 ```
 
 ### Manual
@@ -57,7 +57,7 @@ python manage.py migrate nemo_mqtt
 2. Add `'NEMO_mqtt_bridge'` to `INSTALLED_APPS` in your settings.
 3. (Optional) If you use Django’s `LOGGING` setting, add a `NEMO_mqtt_bridge` logger with your preferred level and handlers (e.g. DEBUG in dev/test, INFO or WARNING in production). What and how you log is installation-dependent.
 4. run `python manage.py setup_nemo_integration` to print integration steps, or add `path("mqtt/", include("NEMO_mqtt_bridge.urls"))` to `NEMO/urls.py` yourself. Use `--write-urls` to have the command add the URL include.
-5. Run `python manage.py migrate nemo_mqtt`.
+5. Run `python manage.py migrate NEMO_mqtt_bridge`.
 
 ### After install
 

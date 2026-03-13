@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("nemo_mqtt", "0001_initial"),
+        ("NEMO_mqtt_bridge", "0001_initial"),
     ]
 
     operations = [

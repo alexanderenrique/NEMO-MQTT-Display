@@ -85,7 +85,7 @@ class Command(BaseCommand):
 
         self.stdout.write("\nNext steps:")
         self.stdout.write("1. Add 'NEMO_mqtt_bridge' to INSTALLED_APPS in your settings if not already present.")
-        self.stdout.write("2. Run migrations: python manage.py migrate nemo_mqtt")
+        self.stdout.write("2. Run migrations: python manage.py migrate NEMO_mqtt_bridge")
         self.stdout.write("3. Start NEMO: python manage.py runserver")
         self.stdout.write("4. Configure MQTT at /customization/mqtt/")
 
@@ -119,7 +119,7 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS("\nNext steps:"))
         self.stdout.write("  • Commit and push the changes, then deploy to the server.")
-        self.stdout.write("  • On the server after deploy: python manage.py migrate nemo_mqtt")
+        self.stdout.write("  • On the server after deploy: python manage.py migrate NEMO_mqtt_bridge")
         self.stdout.write("  • Configure MQTT at /customization/mqtt/\n")
 
     def _print_integration_instructions(self):

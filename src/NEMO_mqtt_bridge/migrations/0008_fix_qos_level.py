@@ -4,14 +4,14 @@ from django.db import migrations, models
 
 
 def set_qos_level_to_one(apps, schema_editor):
-    MQTTConfiguration = apps.get_model("nemo_mqtt", "MQTTConfiguration")
+    MQTTConfiguration = apps.get_model("NEMO_mqtt_bridge", "MQTTConfiguration")
     MQTTConfiguration.objects.all().update(qos_level=1)
 
 
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("nemo_mqtt", "0007_replace_tls_with_hmac"),
+        ("NEMO_mqtt_bridge", "0007_replace_tls_with_hmac"),
     ]
 
     operations = [

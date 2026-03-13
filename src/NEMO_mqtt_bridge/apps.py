@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 class MqttPluginConfig(AppConfig):
     name = "NEMO_mqtt_bridge"
-    label = "nemo_mqtt"
+    label = "NEMO_mqtt_bridge"
     verbose_name = "MQTT Plugin"
     default_auto_field = "django.db.models.AutoField"
     _initialized = False
