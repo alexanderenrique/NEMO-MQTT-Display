@@ -1,5 +1,5 @@
 """
-Process lock to prevent multiple Redis-MQTT bridge instances.
+Process lock to prevent multiple PostgreSQL-MQTT bridge instances.
 """
 
 import fcntl

@@ -20,8 +20,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'settings_dev')
 django.setup()
 
-from NEMO_mqtt_bridge.views import monitor
-from NEMO_mqtt_bridge.redis_publisher import redis_publisher
+# Monitor view is mqtt_monitor / mqtt_monitor_api
+from NEMO_mqtt_bridge.db_publisher import db_publisher
 
 
 def test_monitor():
@@ -29,28 +29,17 @@ def test_monitor():
     logger.info("Testing MQTT Monitor API")
     logger.info("=" * 50)
 
-    # Test Redis connection
-    logger.info("1. Testing Redis connection...")
-    if redis_publisher.is_available():
-        logger.info("   Redis is available")
+    # Test DB publisher connection
+    logger.info("1. Testing DB publisher...")
+    if db_publisher.is_available():
+        logger.info("   DB publisher is available (PostgreSQL)")
     else:
-        logger.error("   Redis is not available")
+        logger.error("   DB publisher not available (requires PostgreSQL)")
         return
 
-    # Test monitor status
-    logger.info("2. Testing monitor status...")
-    logger.info("   Monitor running: %s", monitor.running)
-    logger.info("   Messages count: %s", len(monitor.messages))
-
-    # Start monitoring
-    logger.info("3. Starting monitor...")
-    monitor.start_monitoring()
-    time.sleep(2)  # Give it time to connect
-    logger.info("   Monitor running: %s", monitor.running)
-
     # Publish a test message
-    logger.info("4. Publishing test message...")
-    success = redis_publisher.publish_event(
+    logger.info("2. Publishing test message...")
+    success = db_publisher.publish_event(
         topic="nemo/test/monitor",
         payload='{"test": "message", "timestamp": "' + str(time.time()) + '"}',
         qos=0,
@@ -59,23 +48,11 @@ def test_monitor():
     logger.info("   Message published: %s", success)
 
     # Wait a bit for the message to be processed
-    logger.info("5. Waiting for message processing...")
-    time.sleep(3)
-
-    # Check messages
-    logger.info("6. Checking messages...")
-    messages = monitor.messages
-    logger.info("   Total messages: %s", len(messages))
-
-    if messages:
-        logger.info("   Recent messages:")
-        for i, msg in enumerate(messages[-3:], 1):
-            logger.info("     %s. %s - %s - %s...", i, msg['source'], msg['topic'], msg['payload'][:50])
-    else:
-        logger.info("   No messages found")
+    logger.info("3. Waiting for message processing...")
+    time.sleep(2)
 
     # Test API endpoint
-    logger.info("7. Testing API endpoint...")
+    logger.info("4. Testing API endpoint...")
     from django.test import RequestFactory
     from NEMO_mqtt_bridge.views import mqtt_monitor_api
 

@@ -34,14 +34,3 @@ def mqtt_config():
     )
 
 
-@pytest.fixture
-def redis_mock():
-    """Mock Redis connection for testing."""
-    from unittest.mock import Mock
-    import redis
-
-    mock_redis = Mock(spec=redis.Redis)
-    mock_redis.ping.return_value = True
-    mock_redis.lpush.return_value = 1
-    mock_redis.brpop.return_value = None
-    return mock_redis

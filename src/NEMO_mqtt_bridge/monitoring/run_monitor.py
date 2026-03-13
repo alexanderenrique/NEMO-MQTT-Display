@@ -78,8 +78,8 @@ def main():
     parser = argparse.ArgumentParser(description="MQTT Monitoring Tools")
     parser.add_argument(
         "tool",
-        choices=["mqtt", "redis", "test"],
-        help="Monitoring tool to run: mqtt (full monitor), redis (redis only), test (test signals)",
+        choices=["mqtt", "db", "test"],
+        help="Monitoring tool to run: mqtt (full monitor), db (queue checker), test (test signals)",
     )
     parser.add_argument(
         "--args", nargs="*", help="Additional arguments to pass to the tool"
@@ -107,8 +107,8 @@ def main():
     # Run the appropriate tool
     if args.tool == "mqtt":
         success = run_script("mqtt_monitor.py", args.args)
-    elif args.tool == "redis":
-        success = run_script("redis_checker.py", args.args)
+    elif args.tool == "db":
+        success = run_script("db_checker.py", args.args)
     elif args.tool == "test":
         python_exe = get_python_executable()
         cmd = [python_exe, "manage.py", "test_mqtt_api"]

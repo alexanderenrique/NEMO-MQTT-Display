@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nemo-mqtt-bridge"
-version = "1.0.4"
+version = "2.0.0"
 description = "MQTT integration plugin for NEMO tool usage events"
 readme = "README.md"
 license = "MIT"
@@ -42,8 +42,7 @@ requires-python = ">=3.8"
 dependencies = [
     "paho-mqtt>=1.6.1",
     "Django>=3.2",
-    "redis>=4.0",
-    "redislite>=6.2",
+    "psycopg2-binary>=2.9",
 ]
 
 [project.optional-dependencies]
@@ -159,7 +158,6 @@ strict_equality = true
 [[tool.mypy.overrides]]
 module = [
     "paho.mqtt.*",
-    "redis.*",
-    "redislite.*",
+    "psycopg2.*",
 ]
 ignore_missing_imports = true

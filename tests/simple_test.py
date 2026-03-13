@@ -1,89 +1,77 @@
 #!/usr/bin/env python3
 """
-Simple test to verify Redis connection and message publishing
+Simple test to verify DB publisher and message flow.
+Uses db_publisher (PostgreSQL queue) when available.
 """
 
 import logging
-import redis
 import json
 import time
+import os
+import sys
 
 logger = logging.getLogger(__name__)
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "tests.test_settings")
 
-def test_redis_and_mqtt():
+
+def test_queue_and_mqtt():
+    import django
+
+    django.setup()
+
+    from NEMO_mqtt_bridge.db_publisher import db_publisher
+
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-    logger.info("Testing Redis and MQTT Message Flow")
+    logger.info("Testing PostgreSQL Queue and MQTT Message Flow")
     logger.info("=" * 50)
 
-    # Test Redis connection
-    logger.info("1. Testing Redis connection...")
-    try:
-        r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
-        r.ping()
-        logger.info("   Redis is available")
-    except Exception as e:
-        logger.error("   Redis connection failed: %s", e)
+    if not db_publisher.is_available():
+        logger.warning("DB publisher not available (requires PostgreSQL), skipping")
         return
 
-    # Check current messages
-    logger.info("2. Checking current messages in Redis...")
-    messages = r.lrange('nemo_mqtt_events', 0, -1)
-    logger.info("   Current messages in queue: %s", len(messages))
+    logger.info("1. DB publisher is available (PostgreSQL)")
 
-    # Publish a test message
-    logger.info("3. Publishing test message...")
+    logger.info("2. Publishing test message...")
     test_event = {
-        'topic': 'nemo/test/monitor',
-        'payload': json.dumps({
-            'test': 'message',
-            'timestamp': time.time(),
-            'source': 'test_script'
-        }),
-        'qos': 0,
-        'retain': False,
-        'timestamp': time.time()
+        "topic": "nemo/test/monitor",
+        "payload": json.dumps(
+            {"test": "message", "timestamp": time.time(), "source": "test_script"}
+        ),
+        "qos": 0,
+        "retain": False,
     }
 
-    try:
-        r.lpush('nemo_mqtt_events', json.dumps(test_event))
-        logger.info("   Test message published to Redis")
-    except Exception as e:
-        logger.error("   Failed to publish message: %s", e)
+    success = db_publisher.publish_event(
+        topic=test_event["topic"],
+        payload=test_event["payload"],
+        qos=test_event["qos"],
+        retain=test_event["retain"],
+    )
+    if success:
+        logger.info("   Test message published to queue")
+    else:
+        logger.error("   Failed to publish message")
         return
 
-    # Check messages again
-    logger.info("4. Checking messages after publish...")
-    messages = r.lrange('nemo_mqtt_events', 0, -1)
-    logger.info("   Messages in queue: %s", len(messages))
-
+    messages = db_publisher.get_monitor_messages()
+    logger.info("3. Messages in queue: %s", len(messages))
     if messages:
-        logger.info("   Recent messages:")
         for i, msg in enumerate(messages[:3], 1):
-            try:
-                data = json.loads(msg)
-                logger.info("     %s. %s - %s...", i, data.get('topic', 'unknown'), (data.get('payload', 'unknown') or '')[:50])
-            except Exception:
-                logger.info("     %s. Raw: %s...", i, (msg or '')[:50])
-
-    # Test consuming a message
-    logger.info("5. Testing message consumption...")
-    try:
-        consumed = r.rpop('nemo_mqtt_events')
-        if consumed:
-            data = json.loads(consumed)
-            logger.info("   Consumed message: %s", data.get('topic', 'unknown'))
-        else:
-            logger.warning("   No messages to consume")
-    except Exception as e:
-        logger.error("   Failed to consume message: %s", e)
+            logger.info(
+                "     %s. %s - %s...",
+                i,
+                msg.get("topic", "unknown"),
+                (msg.get("payload", "") or "")[:50],
+            )
 
     logger.info("Test completed!")
     logger.info("Next steps:")
-    logger.info("1. Make sure the external MQTT service is running")
-    logger.info("2. Check the web monitor page")
+    logger.info("1. Make sure the bridge is running: python -m NEMO_mqtt_bridge.postgres_mqtt_bridge")
+    logger.info("2. Check the web monitor page at /mqtt/monitor/")
     logger.info("3. Enable/disable a tool in NEMO to generate real messages")
 
-if __name__ == "__main__":
-    test_redis_and_mqtt()
 
+if __name__ == "__main__":
+    test_queue_and_mqtt()

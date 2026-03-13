@@ -1,3 +1,3 @@
 """
-Bridge subpackage for Redis-MQTT bridge components.
+Bridge subpackage for PostgreSQL-MQTT bridge components.
 """

@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file.
 
 
+## [2.0.0] - 2026-03-13
+
+- **PostgreSQL LISTEN/NOTIFY**: Replaced Redis with PostgreSQL for the event queue.
+  - Django signals insert into `MQTTEventQueue` and use `pg_notify` to wake the bridge.
+  - Bridge uses `LISTEN` for instant event delivery (no polling).
+  - Requires NEMO to use PostgreSQL; no Redis or redislite needed.
+  - New models: `MQTTEventQueue`, `MQTTBridgeStatus`.
+  - Run bridge: `python -m NEMO_mqtt_bridge.postgres_mqtt_bridge`
+  - Dependencies: removed `redis`, `redislite`; added `psycopg2-binary`.
+
+## [1.0.5] - 2026-03-13
+
+- **macOS Redis fallback**: When redislite's bundled redis-server fails to start on macOS (common on Apple Silicon or due to Gatekeeper), the plugin now:
+  1. Tries redislite with its bundled redis-server
+  2. If that fails: patches redislite to use system redis-server from Homebrew (`/opt/homebrew/bin/redis-server` or `/usr/local/bin/redis-server`) and retries
+  3. If that fails: falls back to `redis.Redis(host='localhost', port=6379)`, which requires system Redis to be running (`brew install redis && brew services start redis`)
+
 ## [1.0.4] - 2026-03-13
 
 - Consolidated migrations for fresh installs: replaced 10 migrations (0001–0010) with a single `0001_initial` that creates the production schema directly.

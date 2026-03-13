@@ -5,7 +5,6 @@
 set -e
 
 # Configuration
-REDIS_PORT=6379
 MQTT_PORT=1883
 CHECK_INTERVAL=10  # seconds
 LOG_FILE="/var/log/nemo-mqtt-monitor.log"
@@ -33,15 +32,6 @@ log_warning() {
     echo -e "${YELLOW}[$(date '+%Y-%m-%d %H:%M:%S')] WARNING: $1${NC}" | tee -a "$LOG_FILE"
 }
 
-# Check if Redis is running
-check_redis() {
-    if redis-cli -p "$REDIS_PORT" ping > /dev/null 2>&1; then
-        return 0
-    else
-        return 1
-    fi
-}
-
 # Check if Mosquitto is running
 check_mosquitto() {
     if nc -z localhost "$MQTT_PORT" > /dev/null 2>&1; then
@@ -51,34 +41,11 @@ check_mosquitto() {
     fi
 }
 
-# Check if Redis-MQTT Bridge service is running
+# Check if PostgreSQL-MQTT Bridge service is running
 check_mqtt_service() {
-    if pgrep -f "redis_mqtt_bridge" > /dev/null 2>&1; then
+    if pgrep -f "postgres_mqtt_bridge" > /dev/null 2>&1; then
         return 0
     else
-        return 1
-    fi
-}
-
-# Start Redis
-start_redis() {
-    log "Starting Redis..."
-    
-    if command -v systemctl > /dev/null 2>&1; then
-        sudo systemctl start redis-server || sudo systemctl start redis
-    elif command -v service > /dev/null 2>&1; then
-        sudo service redis-server start || sudo service redis start
-    else
-        redis-server --daemonize yes
-    fi
-    
-    sleep 2
-    
-    if check_redis; then
-        log_success "Redis started successfully"
-        return 0
-    else
-        log_error "Failed to start Redis"
         return 1
     fi
 }
@@ -86,7 +53,7 @@ start_redis() {
 # Start Mosquitto
 start_mosquitto() {
     log "Starting Mosquitto..."
-    
+
     if command -v systemctl > /dev/null 2>&1; then
         sudo systemctl start mosquitto
     elif command -v service > /dev/null 2>&1; then
@@ -94,9 +61,9 @@ start_mosquitto() {
     else
         mosquitto -d
     fi
-    
+
     sleep 2
-    
+
     if check_mosquitto; then
         log_success "Mosquitto started successfully"
         return 0
@@ -106,25 +73,25 @@ start_mosquitto() {
     fi
 }
 
-# Start Redis-MQTT Bridge service
+# Start PostgreSQL-MQTT Bridge service
 start_mqtt_service() {
-    log "Starting Redis-MQTT Bridge service..."
-    
+    log "Starting PostgreSQL-MQTT Bridge service..."
+
     if command -v systemctl > /dev/null 2>&1 && systemctl list-unit-files | grep -q nemo-mqtt; then
         sudo systemctl start nemo-mqtt
     else
         # Start as background process
         cd /opt/nemo || cd "$(dirname "$(dirname "$0")")"
-        nohup python -m NEMO_mqtt_bridge.redis_mqtt_bridge > /dev/null 2>&1 &
+        nohup python -m NEMO_mqtt_bridge.postgres_mqtt_bridge > /dev/null 2>&1 &
     fi
-    
+
     sleep 2
-    
+
     if check_mqtt_service; then
-        log_success "MQTT service started successfully"
+        log_success "MQTT bridge started successfully"
         return 0
     else
-        log_error "Failed to start MQTT service"
+        log_error "Failed to start MQTT bridge"
         return 1
     fi
 }
@@ -132,32 +99,20 @@ start_mqtt_service() {
 # Monitor and restart if needed
 monitor_services() {
     log "Starting service monitor..."
-    
+
     while true; do
-        # Check Redis
-        if ! check_redis; then
-            log_error "Redis is not running"
-            start_redis
-        fi
-        
         # Check Mosquitto
         if ! check_mosquitto; then
             log_error "Mosquitto is not running"
             start_mosquitto
         fi
-        
-        # Check MQTT service
+
+        # Check MQTT bridge service
         if ! check_mqtt_service; then
-            log_error "MQTT service is not running"
+            log_error "MQTT bridge is not running"
             start_mqtt_service
         fi
-        
-        # Check Redis queue length
-        QUEUE_LENGTH=$(redis-cli -n 1 llen nemo_mqtt_events 2>/dev/null || echo "0")
-        if [ "$QUEUE_LENGTH" -gt 1000 ]; then
-            log_warning "Message queue is large: $QUEUE_LENGTH messages"
-        fi
-        
+
         # Sleep before next check
         sleep "$CHECK_INTERVAL"
     done
@@ -167,32 +122,23 @@ monitor_services() {
 check_status() {
     echo "Checking NEMO MQTT services..."
     echo ""
-    
-    # Redis
-    if check_redis; then
-        log_success "Redis: Running"
-        QUEUE_LENGTH=$(redis-cli -n 1 llen nemo_mqtt_events 2>/dev/null || echo "0")
-        echo "  Queue length: $QUEUE_LENGTH messages"
-    else
-        log_error "Redis: Not running"
-    fi
-    
+
     # Mosquitto
     if check_mosquitto; then
         log_success "Mosquitto: Running"
     else
         log_error "Mosquitto: Not running"
     fi
-    
-    # Redis-MQTT Bridge service
+
+    # PostgreSQL-MQTT Bridge service
     if check_mqtt_service; then
-        log_success "Redis-MQTT Bridge: Running"
-        PID=$(pgrep -f "redis_mqtt_bridge" | head -n 1)
+        log_success "PostgreSQL-MQTT Bridge: Running"
+        PID=$(pgrep -f "postgres_mqtt_bridge" | head -n 1)
         echo "  PID: $PID"
     else
-        log_error "Redis-MQTT Bridge: Not running"
+        log_error "PostgreSQL-MQTT Bridge: Not running"
     fi
-    
+
     echo ""
 }
 
@@ -207,20 +153,18 @@ case "${1:-}" in
         ;;
     --start)
         log "Starting all services..."
-        start_redis
         start_mosquitto
         start_mqtt_service
         check_status
         ;;
     --stop)
         log "Stopping all services..."
-        pkill -f "redis_mqtt_bridge" || true
-        
+        pkill -f "postgres_mqtt_bridge" || true
+
         if command -v systemctl > /dev/null 2>&1; then
             sudo systemctl stop mosquitto || true
-            sudo systemctl stop redis || true
         fi
-        
+
         log_success "Services stopped"
         ;;
     *)
@@ -232,8 +176,9 @@ case "${1:-}" in
         echo "  --start     Start all services"
         echo "  --stop      Stop all services"
         echo ""
+        echo "Note: PostgreSQL must be running (NEMO's database). The bridge connects to it."
+        echo ""
         echo "If no option is provided, runs a single health check."
         check_status
         ;;
 esac
-

@@ -1,19 +1,15 @@
 #!/usr/bin/env python3
 """
-Redis-MQTT Bridge Service for NEMO Plugin.
+PostgreSQL-MQTT Bridge Service for NEMO Plugin.
 
-NEMO never connects to the MQTT broker. It publishes events to Redis (see redis_publisher.py).
-This bridge is a separate process that:
-  1. Connects to Redis (localhost:6379 db=1) and consumes from the events list
-  2. Connects to the MQTT broker (using plugin config: host, port, auth)
-  3. For each event from Redis, publishes to the broker
+NEMO publishes events to MQTTEventQueue and uses pg_notify (see db_publisher.py).
+This bridge:
+  1. Connects to PostgreSQL (Django DATABASES) and LISTENs for notifications
+  2. Connects to the MQTT broker (plugin config)
+  3. For each event from the queue, publishes to the broker
 
-So the bridge is the only component that talks to the broker; it forwards Redis → MQTT.
-Connection to the broker uses mqtt_connection.connect_mqtt() and honors max_reconnect_attempts
-and reconnect_delay from the saved MQTT configuration.
-
-Modes:
-  - AUTO: Starts Mosquitto for development; Redis is embedded (redislite) via redis_publisher.
+Requires PostgreSQL. Modes:
+  - AUTO: Starts Mosquitto for development
   - EXTERNAL: Connects to existing services (production)
 """
 import json
@@ -25,7 +21,6 @@ import threading
 import time
 
 import paho.mqtt.client as mqtt
-import redis
 
 if __name__ == "__main__":
     sys.path.insert(
@@ -37,20 +32,18 @@ if __name__ == "__main__":
     django.setup()
 
 try:
-    from NEMO_mqtt_bridge.models import MQTTConfiguration
+    from NEMO_mqtt_bridge.models import MQTTConfiguration, MQTTEventQueue, MQTTBridgeStatus
     from NEMO_mqtt_bridge.utils import get_mqtt_config
 except ImportError:
-    from NEMO.plugins.NEMO_mqtt_bridge.models import MQTTConfiguration
+    from NEMO.plugins.NEMO_mqtt_bridge.models import (
+        MQTTConfiguration,
+        MQTTEventQueue,
+        MQTTBridgeStatus,
+    )
     from NEMO.plugins.NEMO_mqtt_bridge.utils import get_mqtt_config
 
 try:
     from NEMO_mqtt_bridge.connection_manager import ConnectionManager
-    from NEMO_mqtt_bridge.redis_publisher import (
-        EVENTS_LIST_KEY,
-        BRIDGE_CONTROL_KEY,
-        BRIDGE_STATUS_KEY,
-        BRIDGE_STATUS_TTL,
-    )
     from NEMO_mqtt_bridge.bridge.process_lock import acquire_lock, release_lock
     from NEMO_mqtt_bridge.bridge.auto_services import (
         cleanup_existing_services,
@@ -59,12 +52,6 @@ try:
     from NEMO_mqtt_bridge.bridge.mqtt_connection import connect_mqtt
 except ImportError:
     from NEMO.plugins.NEMO_mqtt_bridge.connection_manager import ConnectionManager
-    from NEMO.plugins.NEMO_mqtt_bridge.redis_publisher import (
-        EVENTS_LIST_KEY,
-        BRIDGE_CONTROL_KEY,
-        BRIDGE_STATUS_KEY,
-        BRIDGE_STATUS_TTL,
-    )
     from NEMO.plugins.NEMO_mqtt_bridge.bridge.process_lock import acquire_lock, release_lock
     from NEMO.plugins.NEMO_mqtt_bridge.bridge.auto_services import (
         cleanup_existing_services,
@@ -74,41 +61,72 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+NOTIFY_CHANNEL_EVENTS = "nemo_mqtt_events"
+NOTIFY_CHANNEL_RELOAD = "nemo_mqtt_reload"
+BRIDGE_STATUS_REFRESH_INTERVAL = 30
 
-class RedisMQTTBridge:
-    """Bridges Redis events to MQTT broker."""
+
+def _get_pg_connection_params():
+    """Get PostgreSQL connection params from Django settings."""
+    from django.conf import settings
+
+    db = settings.DATABASES.get("default", {})
+    if "postgresql" not in (db.get("ENGINE") or ""):
+        raise RuntimeError("Database must be PostgreSQL for LISTEN/NOTIFY")
+    params = {
+        "host": db.get("HOST") or "localhost",
+        "port": int(db.get("PORT") or 5432),
+        "dbname": db.get("NAME"),
+        "user": db.get("USER"),
+        "password": db.get("PASSWORD"),
+    }
+    options = db.get("OPTIONS", {})
+    if options:
+        params.update(options)
+    return params
+
+
+def _write_bridge_status(status: str):
+    """Update bridge status in DB for monitor page."""
+    try:
+        MQTTBridgeStatus.objects.update_or_create(
+            key="default",
+            defaults={"status": status},
+        )
+    except Exception as e:
+        logger.debug("Could not write bridge status: %s", e)
+
+
+class PostgresMQTTBridge:
+    """Bridges PostgreSQL queue events to MQTT broker."""
 
     def __init__(self, auto_start: bool = False):
         self.auto_start = auto_start
         self.mqtt_client = None
-        self.redis_client = None
+        self.pg_conn = None
         self.running = False
         self.config = None
         self.thread = None
         self.lock_file = None
-        self.redis_process = None
         self.mosquitto_process = None
         self.broker_host = None
         self.broker_port = None
         self.connection_count = 0
         self.last_connect_time = None
         self.last_disconnect_time = None
-        # Debounce disconnect logging (paho can fire on_disconnect many times)
         self._last_disconnect_log_time = 0
         self._last_disconnect_rc = None
         self._disconnect_log_interval = 5
-        # Throttle reconnection failure logs when circuit breaker is open
         self._last_reconnect_fail_log_time = 0
         self._last_reconnect_fail_msg = None
         self._reconnect_fail_log_interval = 30
         self._last_reconnecting_log_time = 0
         self._reconnecting_log_interval = 15
         self._mqtt_has_connected_before = False
-        self._last_bridge_status_write = 0  # refresh "connected" in Redis for monitor
+        self._last_bridge_status_write = 0
 
-        # MQTT connection manager created in _initialize_mqtt() from config (max_retries, reconnect_delay)
         self.mqtt_connection_mgr = None
-        self.redis_connection_mgr = ConnectionManager(
+        self.pg_connection_mgr = ConnectionManager(
             max_retries=None,
             base_delay=1,
             max_delay=30,
@@ -130,7 +148,7 @@ class RedisMQTTBridge:
         """Start the bridge service."""
         try:
             mode = "AUTO" if self.auto_start else "EXTERNAL"
-            logger.info("Starting Redis-MQTT Bridge (%s mode)", mode)
+            logger.info("Starting PostgreSQL-MQTT Bridge (%s mode)", mode)
 
             self.config = get_mqtt_config()
             if not self.config or not self.config.enabled:
@@ -138,40 +156,39 @@ class RedisMQTTBridge:
                 return False
 
             if self.auto_start:
-                cleanup_existing_services(None)  # no Redis subprocess; redislite is in-process
+                cleanup_existing_services(None)
                 self.mosquitto_process = start_mosquitto(self.config)
 
-            self._initialize_redis()
+            self._initialize_pg()
             self._initialize_mqtt()
 
             self.running = True
             self.thread = threading.Thread(target=self._run, daemon=True)
             self.thread.start()
 
-            logger.info("Redis-MQTT Bridge started successfully")
+            logger.info("PostgreSQL-MQTT Bridge started successfully")
             return True
         except Exception as e:
             logger.error("Failed to start bridge: %s", e)
             return False
 
-    def _initialize_redis(self):
-        def connect():
-            c = redis.Redis(
-                host="localhost",
-                port=6379,
-                db=1,
-                decode_responses=True,
-                socket_connect_timeout=5,
-                socket_timeout=5,
-            )
-            c.ping()
-            return c
+    def _initialize_pg(self):
+        """Connect to PostgreSQL for LISTEN."""
+        import psycopg2
+        from psycopg2 import extensions
 
-        self.redis_client = self.redis_connection_mgr.connect_with_retry(connect)
-        logger.info("Connected to Redis")
+        def connect():
+            params = _get_pg_connection_params()
+            conn = psycopg2.connect(**params)
+            conn.set_isolation_level(extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+            return conn
+
+        self.pg_conn = self.pg_connection_mgr.connect_with_retry(connect)
+        self.pg_conn.cursor().execute(f"LISTEN {NOTIFY_CHANNEL_EVENTS}")
+        self.pg_conn.cursor().execute(f"LISTEN {NOTIFY_CHANNEL_RELOAD}")
+        logger.info("Connected to PostgreSQL, listening for events")
 
     def _initialize_mqtt(self):
-        # Stop existing client so broker can release the session and we don't accumulate clients
         if self.mqtt_client is not None:
             try:
                 self.mqtt_client.loop_stop()
@@ -184,12 +201,9 @@ class RedisMQTTBridge:
         if not self.config or not self.config.enabled:
             raise RuntimeError("No enabled MQTT configuration")
 
-        # Create connection manager from config so max_retries and reconnect_delay are honored
         max_retries = (
-            self.config.max_reconnect_attempts
-            if self.config.max_reconnect_attempts
-            else None
-        )  # 0 = unlimited
+            self.config.max_reconnect_attempts if self.config.max_reconnect_attempts else None
+        )
         base_delay = getattr(self.config, "reconnect_delay", 5) or 5
         self.mqtt_connection_mgr = ConnectionManager(
             max_retries=max_retries,
@@ -216,14 +230,14 @@ class RedisMQTTBridge:
         self.mqtt_client = self.mqtt_connection_mgr.connect_with_retry(connect)
         self.connection_count += 1
         self.last_connect_time = time.time()
-        self._last_reconnect_fail_msg = None  # Reset so next failure is logged
+        self._last_reconnect_fail_msg = None
         logger.info(
             "Connected to MQTT broker at %s:%s", self.broker_host, self.broker_port
         )
 
     def _on_connect(self, client, userdata, flags, rc):
         if rc == 0:
-            self._write_bridge_status("connected")
+            _write_bridge_status("connected")
             if self._mqtt_has_connected_before:
                 logger.info(
                     "Successfully reconnected to MQTT broker at %s:%s",
@@ -238,7 +252,7 @@ class RedisMQTTBridge:
                 )
                 self._mqtt_has_connected_before = True
         else:
-            self._write_bridge_status("disconnected")
+            _write_bridge_status("disconnected")
             errors = {
                 1: "protocol",
                 2: "client id",
@@ -250,7 +264,7 @@ class RedisMQTTBridge:
 
     def _on_disconnect(self, client, userdata, rc):
         self.last_disconnect_time = time.time()
-        self._write_bridge_status("disconnected")
+        _write_bridge_status("disconnected")
         if rc != 0:
             now = time.time()
             rc_changed = self._last_disconnect_rc != rc
@@ -264,16 +278,6 @@ class RedisMQTTBridge:
 
     def _on_publish(self, client, userdata, mid):
         logger.debug("Published mid=%s", mid)
-
-    def _write_bridge_status(self, status: str):
-        """Write bridge connection status to Redis for the monitor page."""
-        if status not in ("connected", "disconnected"):
-            return
-        try:
-            if self.redis_client:
-                self.redis_client.setex(BRIDGE_STATUS_KEY, BRIDGE_STATUS_TTL, status)
-        except Exception as e:
-            logger.debug("Could not write bridge status to Redis: %s", e)
 
     def _ensure_mqtt_connected(self):
         if self.mqtt_client and self.mqtt_client.is_connected():
@@ -299,81 +303,83 @@ class RedisMQTTBridge:
             return False
 
     def _run(self):
-        """Main loop: consume Redis, publish to MQTT."""
-        # Honor config log level so DEBUG in NEMO MQTT settings shows HMAC/message debug
+        """Main loop: LISTEN for notifications, fetch events, publish to MQTT."""
         level_name = getattr(self.config, "log_level", None) or "INFO"
         logger.setLevel(getattr(logging, level_name.upper(), logging.INFO))
         logger.info("Starting consumption loop")
+
         while self.running:
             try:
                 if not self._ensure_mqtt_connected():
                     time.sleep(5)
                     continue
-                # Refresh "connected" status in Redis so monitor page stays up to date (TTL 90s)
-                now = time.time()
-                if (now - self._last_bridge_status_write) >= 30:
-                    self._write_bridge_status("connected")
-                    self._last_bridge_status_write = now
-                try:
-                    self.redis_client.ping()
-                except Exception as e:
-                    logger.warning("Redis disconnected: %s", e)
-                    self._initialize_redis()
-                # Check for config-reload request (e.g. after saving MQTT config in Admin)
-                control = self.redis_client.lpop(BRIDGE_CONTROL_KEY)
-                if control == "reload_config":
-                    logger.info(
-                        "Config reload requested, reconnecting to broker with latest settings"
-                    )
-                    try:
-                        from django.core.cache import cache
 
-                        cache.delete("mqtt_active_config")
-                    except Exception as e:
-                        logger.debug("Could not clear config cache: %s", e)
-                    # Force fresh config from DB so broker username/password and HMAC are current
-                    self.config = get_mqtt_config(force_refresh=True)
-                    # Re-apply log level from new config (e.g. INFO → DEBUG)
-                    level_name = getattr(self.config, "log_level", None) or "INFO"
-                    logger.setLevel(getattr(logging, level_name.upper(), logging.INFO))
-                    self._initialize_mqtt()
-                result = self.redis_client.blpop(EVENTS_LIST_KEY, timeout=1)
-                if result:
-                    channel, event_data = result
-                    self._process_event(event_data)
+                now = time.time()
+                if (now - self._last_bridge_status_write) >= BRIDGE_STATUS_REFRESH_INTERVAL:
+                    _write_bridge_status("connected")
+                    self._last_bridge_status_write = now
+
+                # Poll PostgreSQL for notifications
+                if self.pg_conn:
+                    self.pg_conn.poll()
+                    for notify in self.pg_conn.notifies:
+                        if notify.channel == NOTIFY_CHANNEL_RELOAD:
+                            logger.info(
+                                "Config reload requested, reconnecting to broker"
+                            )
+                            try:
+                                from django.core.cache import cache
+
+                                cache.delete("mqtt_active_config")
+                            except Exception as e:
+                                logger.debug("Could not clear config cache: %s", e)
+                            self.config = get_mqtt_config(force_refresh=True)
+                            level_name = getattr(
+                                self.config, "log_level", None
+                            ) or "INFO"
+                            logger.setLevel(
+                                getattr(logging, level_name.upper(), logging.INFO)
+                            )
+                            self._initialize_mqtt()
+                        elif notify.channel == NOTIFY_CHANNEL_EVENTS:
+                            self._process_pending_events()
+                    self.pg_conn.notifies.clear()
+
+                time.sleep(0.01)
             except Exception as e:
                 logger.error("Service loop error: %s", e)
                 time.sleep(1)
+
         logger.info("Consumption loop stopped")
 
-    def _process_event(self, event_data: str):
+    def _process_pending_events(self):
+        """Fetch unprocessed events and publish to MQTT."""
         try:
-            event = json.loads(event_data)
-            topic = event.get("topic")
-            payload = event.get("payload")
-            qos = event.get("qos", 0)
-            retain = event.get("retain", False)
-            # Debug: exact message from Nemo (Redis) and HMAC secret used for signing
-            _secret = (self.config.hmac_secret_key or "") if self.config else ""
-            logger.debug(
-                "HMAC debug: hmac_secret_key=%r, topic=%s, raw_payload_from_nemo=%r",
-                _secret,
-                topic,
-                payload,
-            )
-            if topic and payload is not None:
-                self._publish_to_mqtt(topic, payload, qos, retain)
-                logger.debug(
-                    "HMAC debug: hmac_secret_key=%r, topic=%s, published_to_mqtt=ok",
-                    _secret,
-                    topic,
-                )
-            else:
-                logger.warning("Invalid event: missing topic or payload")
-        except json.JSONDecodeError as e:
-            logger.error("Invalid JSON: %s", e)
+            events = MQTTEventQueue.objects.filter(processed=False).order_by("id")
+            for event in events:
+                self._process_event(event)
+                event.processed = True
+                event.save(update_fields=["processed"])
         except Exception as e:
-            logger.error("Process event failed: %s", e)
+            logger.error("Failed to process events: %s", e)
+
+    def _process_event(self, event):
+        """Process a single event and publish to MQTT."""
+        topic = event.topic
+        payload = event.payload
+        qos = event.qos
+        retain = event.retain
+        _secret = (self.config.hmac_secret_key or "") if self.config else ""
+        logger.debug(
+            "HMAC debug: hmac_secret_key=%r, topic=%s, raw_payload=%r",
+            _secret,
+            topic,
+            payload,
+        )
+        if topic and payload is not None:
+            self._publish_to_mqtt(topic, payload, qos, retain)
+        else:
+            logger.warning("Invalid event: missing topic or payload")
 
     def _publish_to_mqtt(
         self, topic: str, payload: str, qos: int = 0, retain: bool = False
@@ -381,13 +387,6 @@ class RedisMQTTBridge:
         if not self.mqtt_client or not self.mqtt_client.is_connected():
             logger.warning("MQTT not connected, cannot publish")
             return
-        _secret = (self.config.hmac_secret_key or "") if self.config else ""
-        logger.debug(
-            "HMAC debug: hmac_secret_key=%r, topic=%s, payload_before_hmac=%r",
-            _secret,
-            topic,
-            payload,
-        )
         try:
             out_payload = payload
             if (
@@ -404,27 +403,8 @@ class RedisMQTTBridge:
                         payload,
                         self.config.hmac_secret_key,
                     )
-                    logger.debug(
-                        "HMAC debug: hmac_secret_key=%r, topic=%s, exact_mqtt_message_sent=%r",
-                        _secret,
-                        topic,
-                        out_payload,
-                    )
                 except Exception as e:
                     logger.warning("HMAC signing failed, publishing unsigned: %s", e)
-                    logger.debug(
-                        "HMAC debug: hmac_secret_key=%r, topic=%s, unsigned_payload_sent=%r",
-                        _secret,
-                        topic,
-                        out_payload,
-                    )
-            else:
-                logger.debug(
-                    "HMAC debug: hmac_secret_key=%r, topic=%s, exact_mqtt_message_sent=%r (no HMAC)",
-                    _secret,
-                    topic,
-                    out_payload,
-                )
             result = self.mqtt_client.publish(
                 topic, out_payload, qos=qos, retain=retain
             )
@@ -435,13 +415,16 @@ class RedisMQTTBridge:
 
     def stop(self):
         """Stop the bridge service."""
-        logger.info("Stopping Redis-MQTT Bridge")
+        logger.info("Stopping PostgreSQL-MQTT Bridge")
         self.running = False
         if self.mqtt_client:
             self.mqtt_client.loop_stop()
             self.mqtt_client.disconnect()
-        if self.redis_client:
-            self.redis_client.close()
+        if self.pg_conn:
+            try:
+                self.pg_conn.close()
+            except Exception:
+                pass
         if self.thread and self.thread.is_alive():
             self.thread.join(timeout=5)
         if self.auto_start:
@@ -459,20 +442,20 @@ def get_mqtt_bridge():
     global _mqtt_bridge_instance
     with _mqtt_bridge_lock:
         if _mqtt_bridge_instance is None:
-            _mqtt_bridge_instance = RedisMQTTBridge(auto_start=True)
+            _mqtt_bridge_instance = PostgresMQTTBridge(auto_start=True)
         return _mqtt_bridge_instance
 
 
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser(description="Redis-MQTT Bridge Service")
+    parser = argparse.ArgumentParser(description="PostgreSQL-MQTT Bridge Service")
     parser.add_argument(
-        "--auto", action="store_true", help="AUTO mode: start Redis and Mosquitto"
+        "--auto", action="store_true", help="AUTO mode: start Mosquitto"
     )
     args = parser.parse_args()
 
-    service = RedisMQTTBridge(auto_start=args.auto)
+    service = PostgresMQTTBridge(auto_start=args.auto)
     try:
         if service.start():
             mode = "AUTO" if args.auto else "EXTERNAL"

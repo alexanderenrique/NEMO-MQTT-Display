@@ -20,18 +20,26 @@ def test_package_import():
 
 def test_models_import():
     """Test that models can be imported"""
-    from NEMO_mqtt_bridge.models import MQTTConfiguration, MQTTMessageLog, MQTTEventFilter
+    from NEMO_mqtt_bridge.models import (
+    MQTTConfiguration,
+    MQTTMessageLog,
+    MQTTEventFilter,
+    MQTTEventQueue,
+    MQTTBridgeStatus,
+)
     assert MQTTConfiguration is not None
     assert MQTTMessageLog is not None
     assert MQTTEventFilter is not None
+    assert MQTTEventQueue is not None
+    assert MQTTBridgeStatus is not None
     logger.info("Models imported successfully")
 
 
-def test_redis_publisher_import():
-    """Test that Redis publisher can be imported"""
-    from NEMO_mqtt_bridge.redis_publisher import RedisMQTTPublisher
-    assert RedisMQTTPublisher is not None
-    logger.info("Redis publisher imported successfully")
+def test_db_publisher_import():
+    """Test that DB publisher can be imported"""
+    from NEMO_mqtt_bridge.db_publisher import DBPublisher
+    assert DBPublisher is not None
+    logger.info("DB publisher imported successfully")
 
 
 def test_signal_handler_import():
@@ -45,6 +53,6 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     test_package_import()
     test_models_import()
-    test_redis_publisher_import()
+    test_db_publisher_import()
     test_signal_handler_import()
     logger.info("All simple tests passed!")

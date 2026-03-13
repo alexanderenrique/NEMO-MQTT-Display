@@ -39,22 +39,22 @@ logger = logging.getLogger(__name__)
 
 
 class MQTTSignalHandler:
-    """Handles MQTT signal processing and message publishing via Redis"""
+    """Handles MQTT signal processing and message publishing via PostgreSQL queue"""
 
     def __init__(self):
-        self.redis_publisher = None
-        self._initialize_redis_publisher()
+        self.db_publisher = None
+        self._initialize_db_publisher()
 
-    def _initialize_redis_publisher(self):
-        """Initialize Redis publisher for MQTT events"""
+    def _initialize_db_publisher(self):
+        """Initialize DB publisher for MQTT events"""
         try:
-            from .redis_publisher import redis_publisher
+            from .db_publisher import db_publisher
 
-            self.redis_publisher = redis_publisher
-            logger.info("Redis MQTT publisher initialized")
+            self.db_publisher = db_publisher
+            logger.info("PostgreSQL MQTT publisher initialized")
         except Exception as e:
-            logger.error(f"Failed to initialize Redis publisher: {e}")
-            self.redis_publisher = None
+            logger.error(f"Failed to initialize DB publisher: {e}")
+            self.db_publisher = None
 
     def _get_mqtt_config(self):
         """Get MQTT configuration from database"""
@@ -76,23 +76,23 @@ class MQTTSignalHandler:
             )
 
     def publish_message(self, topic, data):
-        """Publish a message via Redis to external MQTT service"""
+        """Publish a message via PostgreSQL queue to external MQTT service"""
         import uuid
 
         signal_id = str(uuid.uuid4())[:8]
 
         logger.debug(
-            "Django Signal → Redis Publisher: topic=%s data=%s",
+            "Django Signal → DB Publisher: topic=%s data=%s",
             topic,
             json.dumps(data, indent=2),
         )
 
-        if self.redis_publisher:
+        if self.db_publisher:
             try:
                 # Get MQTT configuration for QoS and retain settings
                 config = self._get_mqtt_config()
 
-                success = self.redis_publisher.publish_event(
+                success = self.db_publisher.publish_event(
                     topic,
                     json.dumps(data),
                     qos=config.qos_level,
@@ -100,16 +100,16 @@ class MQTTSignalHandler:
                 )
                 if success:
                     logger.debug(
-                        "Successfully published to Redis (signal_id=%s), message sent to list 'nemo_mqtt_events'",
+                        "Successfully published to queue (signal_id=%s)",
                         signal_id,
                     )
-                    logger.info(f"Successfully published to Redis: {topic}")
+                    logger.info(f"Successfully published to queue: {topic}")
                 else:
-                    logger.error(f"Failed to publish to Redis: {topic}")
+                    logger.error(f"Failed to publish to queue: {topic}")
             except Exception as e:
-                logger.error(f"Failed to publish MQTT message via Redis: {e}")
+                logger.error(f"Failed to publish MQTT message via queue: {e}")
         else:
-            logger.warning("Redis publisher not available")
+            logger.warning("DB publisher not available")
 
 
 # Global signal handler instance
@@ -135,7 +135,7 @@ if NEMO_AVAILABLE:
             instance.operational,
         )
 
-        if signal_handler.redis_publisher:
+        if signal_handler.db_publisher:
             action = "created" if created else "updated"
             data = {
                 "event": f"tool_{action}",
@@ -147,12 +147,12 @@ if NEMO_AVAILABLE:
             logger.debug("Publishing tool_%s event (signal_id=%s)", action, signal_id)
             signal_handler.publish_message(f"nemo/tools/{instance.id}", data)
         else:
-            logger.warning("Redis publisher not available (tool_saved, signal_id=%s)", signal_id)
+            logger.warning("DB publisher not available (tool_saved, signal_id=%s)", signal_id)
 
     @receiver(post_save, sender=Area)
     def area_saved(sender, instance, created, **kwargs):
         """Signal handler for area save events"""
-        if signal_handler.redis_publisher:
+        if signal_handler.db_publisher:
             action = "created" if created else "updated"
             data = {
                 "event": f"area_{action}",
@@ -167,7 +167,7 @@ if NEMO_AVAILABLE:
     @receiver(post_save, sender=Reservation)
     def reservation_saved(sender, instance, created, **kwargs):
         """Signal handler for reservation save events"""
-        if signal_handler.redis_publisher:
+        if signal_handler.db_publisher:
             action = "created" if created else "updated"
             data = {
                 "event": f"reservation_{action}",
@@ -182,16 +182,16 @@ if NEMO_AVAILABLE:
 
     # Usage event signals — SINGLE SOURCE OF TRUTH for tool enable/disable
     # NEMO (and nemo-ce) does not emit tool_enabled/tool_disabled signals; enable = new UsageEvent
-    # (no end), disable = UsageEvent.save() with end set. This handler publishes to Redis for both.
+    # (no end), disable = UsageEvent.save() with end set. This handler publishes to queue for both.
     @receiver(post_save, sender=UsageEvent)
     def usage_event_saved(sender, instance, created, **kwargs):
-        """Publish tool usage start/end to Redis. This is the only source for tool enable/disable."""
+        """Publish tool usage start/end to queue. This is the only source for tool enable/disable."""
         import uuid
 
         signal_id = str(uuid.uuid4())[:8]
 
-        if not signal_handler.redis_publisher:
-            logger.warning("Redis publisher not available (usage_event_saved, signal_id=%s)", signal_id)
+        if not signal_handler.db_publisher:
+            logger.warning("DB publisher not available (usage_event_saved, signal_id=%s)", signal_id)
             return
 
         # End time set = tool disabled (usage ended); no end = tool enabled (usage started)
@@ -208,7 +208,7 @@ if NEMO_AVAILABLE:
             signal_handler.publish_message(
                 f"nemo/tools/{instance.tool.id}/disabled", disabled_data
             )
-            logger.debug("Disabled event published to Redis (signal_id=%s)", signal_id)
+            logger.debug("Disabled event published to queue (signal_id=%s)", signal_id)
         else:
             # Tool enabled / usage started — publish only .../enabled (no .../start to avoid duplicate status)
             logger.debug("No end time - publishing tool_enabled (signal_id=%s)", signal_id)
@@ -224,7 +224,7 @@ if NEMO_AVAILABLE:
             signal_handler.publish_message(
                 f"nemo/tools/{instance.tool.id}/enabled", enabled_data
             )
-            logger.debug("Enabled event published to Redis (signal_id=%s)", signal_id)
+            logger.debug("Enabled event published to queue (signal_id=%s)", signal_id)
 
         logger.debug("Signal processing complete (signal_id=%s)", signal_id)
         logger.info(f"Published events for UsageEvent {instance.id}")
@@ -233,7 +233,7 @@ if NEMO_AVAILABLE:
     @receiver(post_save, sender=AreaAccessRecord)
     def area_access_saved(sender, instance, created, **kwargs):
         """Signal handler for area access save events"""
-        if signal_handler.redis_publisher and created:
+        if signal_handler.db_publisher and created:
             data = {
                 "event": "area_access",
                 "access_id": instance.id,

@@ -30,38 +30,38 @@ class MQTTSignalHandlerTest(TestCase):
             retain_messages=False
         )
     
-    @patch('NEMO_mqtt_bridge.signals.signal_handler.redis_publisher')
-    def test_publish_message_success(self, mock_redis_publisher):
+    @patch('NEMO_mqtt_bridge.signals.signal_handler.db_publisher')
+    def test_publish_message_success(self, mock_db_publisher):
         """Test successful message publishing"""
-        mock_redis_publisher.publish_event.return_value = True
+        mock_db_publisher.publish_event.return_value = True
         
         topic = 'nemo/tools/1/start'
         data = {'event': 'tool_usage_start', 'tool_id': 1}
         
         signal_handler.publish_message(topic, data)
         
-        mock_redis_publisher.publish_event.assert_called_once()
-        call_args = mock_redis_publisher.publish_event.call_args
+        mock_db_publisher.publish_event.assert_called_once()
+        call_args = mock_db_publisher.publish_event.call_args
         self.assertEqual(call_args[0][0], topic)
         self.assertEqual(json.loads(call_args[0][1]), data)
         self.assertEqual(call_args[1]['qos'], 1)
         self.assertEqual(call_args[1]['retain'], False)
     
-    @patch('NEMO_mqtt_bridge.signals.signal_handler.redis_publisher')
-    def test_publish_message_failure(self, mock_redis_publisher):
+    @patch('NEMO_mqtt_bridge.signals.signal_handler.db_publisher')
+    def test_publish_message_failure(self, mock_db_publisher):
         """Test failed message publishing"""
-        mock_redis_publisher.publish_event.return_value = False
+        mock_db_publisher.publish_event.return_value = False
         
         topic = 'nemo/tools/1/start'
         data = {'event': 'tool_usage_start', 'tool_id': 1}
         
         signal_handler.publish_message(topic, data)
         
-        mock_redis_publisher.publish_event.assert_called_once()
+        mock_db_publisher.publish_event.assert_called_once()
     
-    @patch('NEMO_mqtt_bridge.signals.signal_handler.redis_publisher', None)
-    def test_publish_message_no_redis(self):
-        """Test message publishing when Redis is not available"""
+    @patch('NEMO_mqtt_bridge.signals.signal_handler.db_publisher', None)
+    def test_publish_message_no_publisher(self):
+        """Test message publishing when DB publisher is not available"""
         topic = 'nemo/tools/1/start'
         data = {'event': 'tool_usage_start', 'tool_id': 1}
         

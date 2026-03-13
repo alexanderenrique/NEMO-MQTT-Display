@@ -18,7 +18,7 @@ class MqttPluginConfig(AppConfig):
     def ready(self):
         """
         Initialize the MQTT plugin when Django starts.
-        This sets up signal handlers and starts the Redis-MQTT Bridge service.
+        This sets up signal handlers and starts the PostgreSQL-MQTT Bridge service.
         """
         # Prevent multiple initializations during development auto-reload
         if self._initialized:
@@ -54,7 +54,7 @@ class MqttPluginConfig(AppConfig):
         self._initialized = True
         logger.info("MQTT plugin initialization started")
 
-        # Initialize Redis publisher for MQTT events
+        # Initialize DB publisher for MQTT events
         try:
             from .utils import get_mqtt_config
             from .signals import signal_handler
@@ -65,35 +65,35 @@ class MqttPluginConfig(AppConfig):
                 logger.info(
                     f"MQTT plugin initialized successfully with config: {config.name}"
                 )
-                logger.info("MQTT events will be published via Redis to MQTT broker")
+                logger.info("MQTT events will be published via PostgreSQL to MQTT broker")
 
-                # Start the Redis-MQTT Bridge service automatically
+                # Start the PostgreSQL-MQTT Bridge service automatically
                 self._start_external_mqtt_service()
             else:
                 logger.info("MQTT plugin loaded but no enabled configuration found")
-                # Force start the Redis-MQTT Bridge anyway for development
-                logger.info("Starting Redis-MQTT Bridge anyway for development...")
+                # Force start the bridge anyway for development
+                logger.info("Starting PostgreSQL-MQTT Bridge anyway for development...")
                 self._start_external_mqtt_service()
 
         except Exception as e:
             logger.error(f"Failed to initialize MQTT plugin: {e}")
 
         logger.info(
-            "MQTT plugin: Signal handlers and customization registered. Events will be published via Redis."
+            "MQTT plugin: Signal handlers and customization registered. Events will be published via PostgreSQL."
         )
 
     def _start_external_mqtt_service(self):
-        """Start the Redis-MQTT Bridge service automatically"""
+        """Start the PostgreSQL-MQTT Bridge service automatically"""
         # Prevent multiple service starts
         if self._auto_service_started:
-            logger.info("Redis-MQTT Bridge already started, skipping...")
+            logger.info("PostgreSQL-MQTT Bridge already started, skipping...")
             return
 
         try:
-            logger.info("Starting Redis-MQTT Bridge service automatically...")
+            logger.info("Starting PostgreSQL-MQTT Bridge service automatically...")
 
             # Import and get the singleton bridge instance
-            from .redis_mqtt_bridge import get_mqtt_bridge
+            from .postgres_mqtt_bridge import get_mqtt_bridge
 
             mqtt_bridge = get_mqtt_bridge()
 
@@ -107,7 +107,7 @@ class MqttPluginConfig(AppConfig):
                         time.sleep(1)
 
                 except Exception as e:
-                    logger.error(f"Redis-MQTT Bridge error: {e}")
+                    logger.error(f"PostgreSQL-MQTT Bridge error: {e}")
 
             # Start the service in a daemon thread
             mqtt_thread = threading.Thread(target=run_bridge_service, daemon=True)
@@ -115,12 +115,12 @@ class MqttPluginConfig(AppConfig):
 
             # Mark as started
             self._auto_service_started = True
-            logger.info("Redis-MQTT Bridge started successfully")
+            logger.info("PostgreSQL-MQTT Bridge started successfully")
 
         except Exception as e:
-            logger.error(f"Failed to start Redis-MQTT Bridge: {e}")
+            logger.error(f"Failed to start PostgreSQL-MQTT Bridge: {e}")
             logger.info(
-                "MQTT events will still be published to Redis, but bridge service is not running"
+                "MQTT events will still be published to queue, but bridge service is not running"
             )
 
     def get_migration_args(self):

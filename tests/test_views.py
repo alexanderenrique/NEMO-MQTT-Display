@@ -45,21 +45,21 @@ class MQTTMonitorViewTest(TestCase):
         response = self.client.get("/mqtt/monitor/api/")
         self.assertEqual(response.status_code, 302)  # Redirect to login
 
-    @patch("NEMO_mqtt_bridge.redis_publisher.redis_publisher")
-    def test_mqtt_monitor_api_returns_messages(self, mock_redis_publisher):
-        """Test MQTT monitor API returns messages from Redis"""
-        mock_redis_publisher.get_monitor_messages.return_value = [
+    @patch("NEMO_mqtt_bridge.db_publisher.db_publisher")
+    def test_mqtt_monitor_api_returns_messages(self, mock_db_publisher):
+        """Test MQTT monitor API returns messages from queue"""
+        mock_db_publisher.get_monitor_messages.return_value = [
             {
                 "id": 1,
                 "timestamp": "2024-01-15T10:30:00Z",
-                "source": "Redis",
+                "source": "PostgreSQL",
                 "topic": "nemo/tools/1/start",
                 "payload": '{"event": "tool_usage_start"}',
                 "qos": 1,
                 "retain": False,
             }
         ]
-        mock_redis_publisher.get_bridge_status.return_value = "connected"
+        mock_db_publisher.get_bridge_status.return_value = "connected"
 
         self.client.login(username="testuser", password="testpass123")
         response = self.client.get("/mqtt/monitor/api/")
@@ -72,11 +72,11 @@ class MQTTMonitorViewTest(TestCase):
         self.assertEqual(data["broker_connected"], "connected")
         self.assertEqual(data["messages"][0]["topic"], "nemo/tools/1/start")
 
-    @patch("NEMO_mqtt_bridge.redis_publisher.redis_publisher")
-    def test_mqtt_monitor_api_empty_messages(self, mock_redis_publisher):
-        """Test MQTT monitor API when no messages in Redis"""
-        mock_redis_publisher.get_monitor_messages.return_value = []
-        mock_redis_publisher.get_bridge_status.return_value = None
+    @patch("NEMO_mqtt_bridge.db_publisher.db_publisher")
+    def test_mqtt_monitor_api_empty_messages(self, mock_db_publisher):
+        """Test MQTT monitor API when no messages in queue"""
+        mock_db_publisher.get_monitor_messages.return_value = []
+        mock_db_publisher.get_bridge_status.return_value = None
 
         self.client.login(username="testuser", password="testpass123")
         response = self.client.get("/mqtt/monitor/api/")
@@ -87,10 +87,10 @@ class MQTTMonitorViewTest(TestCase):
         self.assertEqual(data["count"], 0)
         self.assertTrue(data["monitoring"])
 
-    @patch("NEMO_mqtt_bridge.redis_publisher.redis_publisher")
-    def test_mqtt_monitor_api_handles_exception(self, mock_redis_publisher):
-        """Test MQTT monitor API handles Redis errors gracefully"""
-        mock_redis_publisher.get_monitor_messages.side_effect = Exception("Redis unavailable")
+    @patch("NEMO_mqtt_bridge.db_publisher.db_publisher")
+    def test_mqtt_monitor_api_handles_exception(self, mock_db_publisher):
+        """Test MQTT monitor API handles DB errors gracefully"""
+        mock_db_publisher.get_monitor_messages.side_effect = Exception("DB unavailable")
 
         self.client.login(username="testuser", password="testpass123")
         response = self.client.get("/mqtt/monitor/api/")

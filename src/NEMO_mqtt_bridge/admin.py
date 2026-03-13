@@ -72,14 +72,13 @@ class MQTTConfigurationAdmin(admin.ModelAdmin):
         if not obj.enabled:
             return "Disabled"
         try:
-            # Check Redis connection status
             from .signals import signal_handler
 
-            if signal_handler.redis_publisher:
-                if signal_handler.redis_publisher.is_available():
-                    return "Redis Connected (External MQTT Service Required)"
+            if signal_handler.db_publisher:
+                if signal_handler.db_publisher.is_available():
+                    return "PostgreSQL Connected (Bridge Required)"
                 else:
-                    return "Redis Disconnected"
+                    return "PostgreSQL Unavailable"
             else:
                 return "Not Initialized"
         except Exception:

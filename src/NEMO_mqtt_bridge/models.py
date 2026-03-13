@@ -137,6 +137,53 @@ class MQTTMessageLog(models.Model):
         return f"{self.topic} - {status} ({self.sent_at})"
 
 
+class MQTTEventQueue(models.Model):
+    """Queue of MQTT events for the bridge to consume via PostgreSQL LISTEN/NOTIFY."""
+
+    topic = models.CharField(max_length=500)
+    payload = models.TextField()
+    qos = models.IntegerField(default=1)
+    retain = models.BooleanField(default=False)
+    processed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "nemo_mqtt_mqtt_eventqueue"
+        verbose_name = "MQTT Event Queue"
+        verbose_name_plural = "MQTT Event Queues"
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"{self.topic} ({'processed' if self.processed else 'pending'})"
+
+
+class MQTTBridgeStatus(models.Model):
+    """Bridge connection status for the monitor page (single row)."""
+
+    key = models.CharField(
+        max_length=20,
+        unique=True,
+        default="default",
+        help_text="Singleton key for bridge status",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ("connected", "Connected"),
+            ("disconnected", "Disconnected"),
+        ],
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "nemo_mqtt_mqttbridgestatus"
+        verbose_name = "MQTT Bridge Status"
+        verbose_name_plural = "MQTT Bridge Statuses"
+
+    def __str__(self):
+        return f"{self.status} at {self.updated_at}"
+
+
 class MQTTEventFilter(models.Model):
     """Filter configuration for which events to publish via MQTT"""
 
@@ -185,7 +232,7 @@ class MQTTEventFilter(models.Model):
 def clear_mqtt_config_cache_on_save(sender, instance, **kwargs):
     """Clear the MQTT configuration cache when a configuration is saved and notify bridge to reload."""
     cache.delete("mqtt_active_config")
-    from .redis_publisher import notify_bridge_reload_config
+    from .db_publisher import notify_bridge_reload_config
 
     notify_bridge_reload_config()
 

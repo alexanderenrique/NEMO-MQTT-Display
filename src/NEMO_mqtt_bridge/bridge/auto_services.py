@@ -1,7 +1,7 @@
 """
 AUTO mode: start Mosquitto for development/testing.
 
-Redis is provided by redislite (embedded) via redis_publisher; no subprocess needed.
+PostgreSQL is used for the event queue; no Redis needed.
 """
 
 import logging
@@ -15,12 +15,11 @@ logger = logging.getLogger(__name__)
 
 def cleanup_existing_services(redis_process=None):
     """Clean up any existing MQTT broker and bridge instances.
-    redis_process is ignored (redislite used, no subprocess)."""
+    redis_process is ignored (kept for API compatibility)."""
     try:
-        # redislite runs in-process; no Redis subprocess to terminate
         subprocess.run(["pkill", "-f", "mosquitto"], capture_output=True)
         subprocess.run(["pkill", "-9", "mosquitto"], capture_output=True)
-        subprocess.run(["pkill", "-f", "redis_mqtt_bridge"], capture_output=True)
+        subprocess.run(["pkill", "-f", "postgres_mqtt_bridge"], capture_output=True)
         time.sleep(2)
         logger.info("Cleaned up existing services")
     except Exception as e:

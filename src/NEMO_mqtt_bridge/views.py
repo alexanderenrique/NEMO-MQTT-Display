@@ -10,15 +10,15 @@ from django.contrib.auth.decorators import login_required
 
 @login_required
 def mqtt_monitor(request):
-    """Web-based monitor: stream of messages NEMO publishes to Redis (pre-MQTT)."""
+    """Web-based monitor: stream of messages NEMO publishes to queue (pre-MQTT)."""
     mqtt_config = None
     broker_connected = None
     try:
         from .utils import get_mqtt_config
-        from .redis_publisher import redis_publisher
+        from .db_publisher import db_publisher
 
         mqtt_config = get_mqtt_config()
-        broker_connected = redis_publisher.get_bridge_status()
+        broker_connected = db_publisher.get_bridge_status()
     except Exception:
         pass
     response = render(
@@ -39,12 +39,12 @@ def mqtt_monitor(request):
 @login_required
 @require_http_methods(["GET"])
 def mqtt_monitor_api(request):
-    """API endpoint: recent messages from Redis (what NEMO has published to the pipeline)."""
+    """API endpoint: recent messages from queue (what NEMO has published to the pipeline)."""
     try:
-        from .redis_publisher import redis_publisher
+        from .db_publisher import db_publisher
 
-        messages = redis_publisher.get_monitor_messages()
-        broker_connected = redis_publisher.get_bridge_status()
+        messages = db_publisher.get_monitor_messages()
+        broker_connected = db_publisher.get_bridge_status()
         response_data = {
             "messages": messages,
             "count": len(messages),
