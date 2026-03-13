@@ -2,14 +2,17 @@
 Redis-based MQTT Event Publisher for NEMO
 This module handles publishing events to Redis instead of directly to MQTT.
 The external MQTT service will consume these events and publish them to the MQTT broker.
+Uses redislite for embedded Redis; no separate redis-server process required.
 """
 
 import json
 import logging
-import redis
 import time
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional
+
+import redis
+import redislite
 
 logger = logging.getLogger(__name__)
 
@@ -30,23 +33,20 @@ class RedisMQTTPublisher:
         self._initialize_redis()
 
     def _initialize_redis(self):
-        """Initialize Redis client with retry logic"""
+        """Initialize embedded Redis via redislite (starts server on port 6379, db=1)."""
         max_retries = 5
         retry_delay = 1
 
         for attempt in range(max_retries):
             try:
-                self.redis_client = redis.Redis(
-                    host="localhost",
-                    port=6379,
+                # redislite starts an embedded Redis server on the given port
+                self.redis_client = redislite.Redis(
+                    serverconfig={"port": "6379"},
                     db=1,  # Use database 1 for plugin isolation
                     decode_responses=True,
-                    socket_connect_timeout=5,
-                    socket_timeout=5,
                 )
-                # Test connection
                 self.redis_client.ping()
-                logger.info("Connected to Redis for MQTT event publishing")
+                logger.info("Connected to embedded Redis (redislite) for MQTT event publishing")
                 return
             except Exception as e:
                 logger.warning(
@@ -54,7 +54,7 @@ class RedisMQTTPublisher:
                 )
                 if attempt < max_retries - 1:
                     time.sleep(retry_delay)
-                    retry_delay *= 2  # Exponential backoff
+                    retry_delay *= 2
                 else:
                     logger.error(
                         f"Failed to connect to Redis after {max_retries} attempts: {e}"

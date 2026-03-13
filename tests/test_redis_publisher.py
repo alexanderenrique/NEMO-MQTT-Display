@@ -15,7 +15,7 @@ class RedisMQTTPublisherTest(TestCase):
         """Set up test data"""
         self.publisher = RedisMQTTPublisher()
     
-    @patch('redis.Redis')
+    @patch('redislite.Redis')
     def test_initialize_redis_success(self, mock_redis_class):
         """Test successful Redis initialization"""
         mock_redis = Mock()
@@ -27,7 +27,7 @@ class RedisMQTTPublisherTest(TestCase):
         self.assertEqual(self.publisher.redis_client, mock_redis)
         mock_redis.ping.assert_called_once()
     
-    @patch('redis.Redis')
+    @patch('redislite.Redis')
     def test_initialize_redis_failure_retry(self, mock_redis_class):
         """Test Redis initialization with retry logic"""
         mock_redis = Mock()
@@ -40,7 +40,7 @@ class RedisMQTTPublisherTest(TestCase):
         self.assertEqual(self.publisher.redis_client, mock_redis)
         self.assertEqual(mock_redis.ping.call_count, 2)
     
-    @patch('redis.Redis')
+    @patch('redislite.Redis')
     def test_initialize_redis_max_retries_exceeded(self, mock_redis_class):
         """Test Redis initialization when max retries exceeded"""
         mock_redis = Mock()

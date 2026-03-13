@@ -13,7 +13,7 @@ Connection to the broker uses mqtt_connection.connect_mqtt() and honors max_reco
 and reconnect_delay from the saved MQTT configuration.
 
 Modes:
-  - AUTO: Starts Redis and Mosquitto for development
+  - AUTO: Starts Mosquitto for development; Redis is embedded (redislite) via redis_publisher.
   - EXTERNAL: Connects to existing services (production)
 """
 import json
@@ -54,7 +54,6 @@ try:
     from NEMO_mqtt_bridge.bridge.process_lock import acquire_lock, release_lock
     from NEMO_mqtt_bridge.bridge.auto_services import (
         cleanup_existing_services,
-        start_redis,
         start_mosquitto,
     )
     from NEMO_mqtt_bridge.bridge.mqtt_connection import connect_mqtt
@@ -69,7 +68,6 @@ except ImportError:
     from NEMO.plugins.NEMO_mqtt_bridge.bridge.process_lock import acquire_lock, release_lock
     from NEMO.plugins.NEMO_mqtt_bridge.bridge.auto_services import (
         cleanup_existing_services,
-        start_redis,
         start_mosquitto,
     )
     from NEMO.plugins.NEMO_mqtt_bridge.bridge.mqtt_connection import connect_mqtt
@@ -140,8 +138,7 @@ class RedisMQTTBridge:
                 return False
 
             if self.auto_start:
-                cleanup_existing_services(self.redis_process)
-                self.redis_process = start_redis()
+                cleanup_existing_services(None)  # no Redis subprocess; redislite is in-process
                 self.mosquitto_process = start_mosquitto(self.config)
 
             self._initialize_redis()
@@ -448,7 +445,7 @@ class RedisMQTTBridge:
         if self.thread and self.thread.is_alive():
             self.thread.join(timeout=5)
         if self.auto_start:
-            cleanup_existing_services(self.redis_process)
+            cleanup_existing_services(None)
         release_lock(self.lock_file)
         logger.info("Bridge stopped")
 

@@ -27,7 +27,7 @@ Configuration is stored in Django (e.g. `/customization/mqtt/`) and loaded by th
 
 ## Installation
 
-**Prerequisites:** Python 3.8+, Django 3.2+, NEMO-CE 4.0+, Redis, MQTT broker (e.g. Mosquitto).
+**Prerequisites:** Python 3.8+, Django 3.2+, NEMO-CE 4.0+, MQTT broker (e.g. Mosquitto). Redis is embedded via `redislite`; no separate Redis server required.
 
 **Simplified deployment:** The plugin package is `NEMO_mqtt_bridge`. Add `'NEMO_mqtt_bridge'` to `INSTALLED_APPS`, then run `python manage.py setup_nemo_integration` (use `--write-urls` to add the URL include to `NEMO/urls.py`) and `python manage.py migrate NEMO_mqtt_bridge`.
 
@@ -62,9 +62,9 @@ python manage.py migrate NEMO_mqtt_bridge
 ### After install
 
 1. **Configure**: Open `/customization/mqtt/` in NEMO, set broker host/port (and auth if needed), enable the config.
-2. **Start NEMO** (e.g. `python manage.py runserver`). With the default AUTO mode, the plugin automatically starts Redis and the Redis–MQTT bridge (and a local Mosquitto broker for development).
+2. **Start NEMO** (e.g. `python manage.py runserver`). With the default AUTO mode, the plugin uses embedded Redis (redislite) and the Redis–MQTT bridge (and a local Mosquitto broker for development).
 
-**Production:** Use EXTERNAL mode so the plugin does not start or kill brokers: set `RedisMQTTBridge(auto_start=False)` in `NEMO_mqtt_bridge/apps.py`. Then start Redis and the MQTT broker yourself, and run the bridge separately (e.g. `python -m NEMO_mqtt_bridge.redis_mqtt_bridge` or as a systemd service).
+**Production:** Use EXTERNAL mode so the plugin does not start or kill brokers: set `RedisMQTTBridge(auto_start=False)` in `NEMO_mqtt_bridge/apps.py`. Then start the MQTT broker yourself, and run the bridge separately (e.g. `python -m NEMO_mqtt_bridge.redis_mqtt_bridge` or as a systemd service). Embedded Redis runs in-process; no Redis sidecar needed.
 
 ---
 

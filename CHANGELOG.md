@@ -11,12 +11,11 @@ All notable changes to this project will be documented in this file.
   - Added migration 0010 to rename tables from `nemo_mqtt_bridge_*` to `nemo_mqtt_*` for consistency with model `db_table` values.
   - Updated admin URLs and documentation.
   - **Upgrade from &lt; 1.0.3:** If you previously ran migrations with `nemo_mqtt`, run: `UPDATE django_migrations SET app = 'NEMO_mqtt_bridge' WHERE app = 'nemo_mqtt';` before or after upgrading.
-  - **redis-wheel integration** for Docker and containerized deployments:
-  - Added `redis-wheel>=6.2.5` as an optional dependency (manylinux, macOS; excluded on Windows).
-  - When installed, the plugin uses the bundled Redis binary instead of requiring a system `redis-server`.
-  - Enables running the plugin in a single container without a Redis sidecar or pre-installed Redis.
-  - Falls back to system `redis-server` when redis-wheel is not available.
-  - Improved startup timing: 1.5 s delay after spawning Redis before connection attempts; 15 s total wait window.
+  - **redislite integration** for embedded Redis:
+    - Replaced redis-wheel and system redis-server with `redislite` as a core dependency.
+    - Uses embedded Redis in-process; no separate `redis-server` binary or subprocess required.
+    - Enables running the plugin in a single container without a Redis sidecar.
+    - Works on Python 3.9+ including 3.13.
 
 ## [1.0.2] - 2026-03-05
 
