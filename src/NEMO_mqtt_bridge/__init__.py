@@ -5,7 +5,7 @@ A Django plugin that provides MQTT integration for NEMO tool usage events.
 This plugin enables real-time publishing of tool usage data to MQTT brokers.
 """
 
-__version__ = "2.1.1"
+__version__ = "2.1.2"
 __author__ = "Alex Denton"
 __email__ = "alexdenton998@gmail.com"
 

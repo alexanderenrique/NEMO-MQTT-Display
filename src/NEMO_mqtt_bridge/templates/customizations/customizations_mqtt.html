@@ -26,38 +26,63 @@
         <div class="customization-separation"></div>
         <h3 class="customization-section-title">Event Types</h3>
         <p class="help-block light-grey">
-            Select which NEMO events should be published to MQTT. These filters apply to all tools and areas.
+            Select which NEMO events should be published to MQTT. Uncheck any you do not want sent to the broker.
         </p>
+
         <div class="form-group">
-            <label class="control-label col-md-3">Operational Status Events</label>
+            <label class="control-label col-md-3">Enable / Disable</label>
             <div class="col-md-9">
                 <div class="checkbox">
                     <label>
                         <input type="checkbox"
-                               name="mqtt_event_tool_operational"
-                               {% if mqtt_event_filters.tool_operational %}checked{% endif %}
+                               name="mqtt_event_usage_event_save"
+                               {% if mqtt_event_filters.usage_event_save %}checked{% endif %}
                                value="enabled">
-                        Publish <code>tool_operational</code> events
+                        Publish tool <strong>enabled</strong> and <strong>disabled</strong> events
                         <span class="help-block light-grey">
-                            Sent when a tool transitions to an operational state (problem cleared).
-                        </span>
-                    </label>
-                </div>
-                <div class="checkbox">
-                    <label>
-                        <input type="checkbox"
-                               name="mqtt_event_tool_non_operational"
-                               {% if mqtt_event_filters.tool_non_operational %}checked{% endif %}
-                               value="enabled">
-                        Publish <code>tool_non_operational</code> events
-                        <span class="help-block light-grey">
-                            Sent when a tool is marked non-operational (e.g., forced shutdown task).
+                            Sent when a user starts or stops using a tool (<code>nemo/tools/{id}/enabled</code>, <code>.../disabled</code>).
                         </span>
                     </label>
                 </div>
             </div>
         </div>
-        
+
+        <div class="form-group">
+            <label class="control-label col-md-3">Operational / Non-operational</label>
+            <div class="col-md-9">
+                <div class="checkbox">
+                    <label>
+                        <input type="checkbox"
+                               name="mqtt_event_operational_group"
+                               {% if mqtt_event_filters.tool_operational and mqtt_event_filters.tool_non_operational %}checked{% endif %}
+                               value="enabled">
+                        Publish <strong>operational</strong> and <strong>non-operational</strong> events
+                        <span class="help-block light-grey">
+                            Sent when a tool transitions between up/down (<code>nemo/tools/{id}/operational</code>, <code>.../non-operational</code>).
+                        </span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="control-label col-md-3">Task created / Task resolved</label>
+            <div class="col-md-9">
+                <div class="checkbox">
+                    <label>
+                        <input type="checkbox"
+                               name="mqtt_event_task_group"
+                               {% if mqtt_event_filters.task_created and mqtt_event_filters.task_resolved %}checked{% endif %}
+                               value="enabled">
+                        Publish <strong>task created</strong> and <strong>task resolved</strong> events
+                        <span class="help-block light-grey">
+                            Sent when tasks are created or updated for a tool (<code>nemo/tools/{id}/tasks</code>).
+                        </span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
         <div class="form-group">
             <label class="control-label col-md-3" for="mqtt_name">Configuration Name</label>
             <div class="col-md-4">
@@ -188,18 +213,6 @@
         <!-- Message Settings -->
         <div class="customization-separation"></div>
         <h3 class="customization-section-title">Message Settings</h3>
-        
-        <div class="form-group">
-            <label class="control-label col-md-3" for="mqtt_topic_prefix">Topic Prefix</label>
-            <div class="col-md-4">
-                <input type="text" 
-                       id="mqtt_topic_prefix" 
-                       name="mqtt_topic_prefix" 
-                       class="form-control" 
-                       value="{{ config.topic_prefix }}">
-            </div>
-            <div class="col-md-5 help-block light-grey">Prefix for all MQTT topics (e.g., 'nemo/' for topics like 'nemo/tool/start').</div>
-        </div>
         
         <div class="form-group">
             <label class="control-label col-md-3">Message Options</label>

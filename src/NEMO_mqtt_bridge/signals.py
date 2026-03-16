@@ -12,7 +12,16 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
-from .models import MQTTConfiguration
+from .models import MQTTConfiguration, MQTTEventFilter
+
+
+def _event_filter_enabled(event_type: str) -> bool:
+    """Return True if this event type should be published (default True if no filter row)."""
+    try:
+        filt = MQTTEventFilter.objects.get(event_type=event_type)
+        return filt.enabled
+    except (MQTTEventFilter.DoesNotExist, Exception):
+        return True
 
 
 # Check if NEMO is available
@@ -26,16 +35,24 @@ def _check_nemo_availability():
             Reservation,
             UsageEvent,
             AreaAccessRecord,
+            Task,
         )
 
-        return True, Tool, Area, User, Reservation, UsageEvent, AreaAccessRecord
+        return True, Tool, Area, User, Reservation, UsageEvent, AreaAccessRecord, Task
     except (ImportError, RuntimeError):
-        return False, None, None, None, None, None, None
+        return False, None, None, None, None, None, None, None
 
 
-NEMO_AVAILABLE, Tool, Area, User, Reservation, UsageEvent, AreaAccessRecord = (
-    _check_nemo_availability()
-)
+(
+    NEMO_AVAILABLE,
+    Tool,
+    Area,
+    User,
+    Reservation,
+    UsageEvent,
+    AreaAccessRecord,
+    Task,
+) = _check_nemo_availability()
 
 # Try to import NEMO's custom tool operational signals.
 try:
@@ -196,6 +213,8 @@ if NEMO_AVAILABLE:
         if not signal_handler.db_publisher:
             logger.warning("DB publisher not available (usage_event_saved, signal_id=%s)", signal_id)
             return
+        if not _event_filter_enabled("usage_event_save"):
+            return
 
         # End time set = tool disabled (usage ended); no end = tool enabled (usage started)
         if instance.end is not None:
@@ -261,6 +280,8 @@ if NEMO_AVAILABLE:
             if not signal_handler.db_publisher:
                 logger.warning("DB publisher not available (tool_operational)")
                 return
+            if not _event_filter_enabled("tool_operational"):
+                return
 
             data = {
                 "event": "tool_operational",
@@ -278,6 +299,67 @@ if NEMO_AVAILABLE:
             )
             signal_handler.publish_message(topic, data)
 
+    @receiver(post_save, sender=Task)
+    def task_saved(sender, instance: Task, created: bool, **kwargs):
+        """
+        Publish per-tool task details (including problem_description) when tasks
+        are created or updated. This runs for all tasks that are linked to a tool,
+        regardless of force_shutdown or safety_hazard flags.
+
+        This sends messages on a per-tool topic:
+            nemo/tools/{tool_id}/tasks
+        """
+        if not signal_handler.db_publisher:
+            logger.warning("DB publisher not available (task_saved)")
+            return
+
+        # Only consider tasks linked to a tool
+        if not instance.tool_id:
+            return
+
+        # Check filter: task_created for new tasks, task_resolved for updates
+        if created:
+            if not _event_filter_enabled("task_created"):
+                return
+        else:
+            if not _event_filter_enabled("task_resolved"):
+                return
+
+        # Determine event type:
+        # - If the task forces shutdown or is a safety hazard, keep "task_shutdown"
+        # - Otherwise, treat as a generic task update
+        if instance.force_shutdown or instance.safety_hazard:
+            event_type = "task_shutdown"
+        else:
+            event_type = "task_updated" if not created else "task_created"
+
+        task = instance
+        tool = task.tool
+
+        data = {
+            "event": event_type,
+            "task_id": task.id,
+            "tool_id": tool.id if tool else None,
+            "tool_name": tool.name if tool else None,
+            "problem_description": task.problem_description,
+            "force_shutdown": bool(task.force_shutdown),
+            "safety_hazard": bool(task.safety_hazard),
+            "cancelled": bool(task.cancelled),
+            "resolved": bool(task.resolved),
+            "created_at": task.creation_time.isoformat() if task.creation_time else None,
+            "updated_at": task.last_updated.isoformat() if task.last_updated else None,
+        }
+
+        topic = f"nemo/tools/{tool.id}/tasks" if tool else "nemo/tasks/unknown_tool"
+        logger.debug(
+            "Publishing task event via queue: topic=%s data=%s",
+            topic,
+            json.dumps(data),
+        )
+        signal_handler.publish_message(topic, data)
+
+    if nemo_tool_enabled is not None and nemo_tool_disabled is not None:
+
         @receiver(nemo_tool_disabled, sender=Tool)
         def tool_non_operational(sender, instance: Tool, **kwargs):
             """
@@ -287,6 +369,8 @@ if NEMO_AVAILABLE:
             """
             if not signal_handler.db_publisher:
                 logger.warning("DB publisher not available (tool_non_operational)")
+                return
+            if not _event_filter_enabled("tool_non_operational"):
                 return
 
             data = {

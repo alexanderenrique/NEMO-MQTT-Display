@@ -129,7 +129,7 @@ class ToolSignalsTest(TestCase):
 
 @pytest.mark.skipif(not NEMO_AVAILABLE, reason="NEMO not installed or not in INSTALLED_APPS")
 class UsageEventSignalsTest(TestCase):
-    """Test usage event signal handlers"""
+    """Test usage event and task-related signal handlers"""
     
     def setUp(self):
         """Set up test data"""
@@ -167,9 +167,10 @@ class UsageEventSignalsTest(TestCase):
         
         mock_publish.assert_called_once()
         call_args = mock_publish.call_args
-        self.assertEqual(call_args[0][0], f'nemo/tools/{tool.name}/start')
-        self.assertEqual(call_args[0][1]['event'], 'tool_usage_start')
-        self.assertEqual(call_args[0][1]['tool_name'], tool.name)
+        # Current implementation publishes to nemo/tools/{tool.id}/enabled
+        self.assertIn(str(tool.id), call_args[0][0])
+        self.assertEqual(call_args[0][1]['event'], 'tool_enabled')
+        self.assertEqual(call_args[0][1]['tool_id'], tool.id)
     
     @patch('NEMO_mqtt_bridge.signals.signal_handler.publish_message')
     def test_usage_event_end_signal(self, mock_publish):
@@ -193,6 +194,36 @@ class UsageEventSignalsTest(TestCase):
         
         mock_publish.assert_called_once()
         call_args = mock_publish.call_args
-        self.assertEqual(call_args[0][0], f'nemo/tools/{tool.name}/end')
-        self.assertEqual(call_args[0][1]['event'], 'tool_usage_end')
-        self.assertEqual(call_args[0][1]['tool_name'], tool.name)
+        # Current implementation publishes to nemo/tools/{tool.id}/disabled
+        self.assertIn(str(tool.id), call_args[0][0])
+        self.assertEqual(call_args[0][1]['event'], 'tool_disabled')
+        self.assertEqual(call_args[0][1]['tool_id'], tool.id)
+
+    @patch('NEMO_mqtt_bridge.signals.signal_handler.publish_message')
+    def test_task_saved_shutdown_publishes_per_tool_task_topic(self, mock_publish):
+        """Test that a shutdown-related Task publishes to nemo/tools/{tool_id}/tasks"""
+        from NEMO.models import Tool, Task
+        from datetime import datetime
+
+        tool = Tool.objects.create(name='Task Tool', operational=False)
+
+        task = Task.objects.create(
+            urgency=Task.Urgency.NORMAL,
+            tool=tool,
+            force_shutdown=True,
+            safety_hazard=False,
+            creator=self.user,
+            creation_time=datetime.now(),
+            problem_description="Test shutdown problem",
+        )
+
+        from NEMO_mqtt_bridge.signals import task_saved
+        task_saved(Task, task, created=True)
+
+        mock_publish.assert_called_once()
+        topic, payload = mock_publish.call_args[0]
+        self.assertIn(f"nemo/tools/{tool.id}/tasks", topic)
+        self.assertEqual(payload["event"], "task_shutdown")
+        self.assertEqual(payload["task_id"], task.id)
+        self.assertEqual(payload["tool_id"], tool.id)
+        self.assertEqual(payload["problem_description"], "Test shutdown problem")

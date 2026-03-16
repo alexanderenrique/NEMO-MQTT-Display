@@ -198,6 +198,9 @@ class MQTTEventFilter(models.Model):
         ("area_access_save", "Area Access Save"),
         ("tool_operational", "Tool Operational"),
         ("tool_non_operational", "Tool Non-Operational"),
+        ("task_shutdown", "Task Shutdown (per-tool tasks topic)"),
+        ("task_created", "Task Created"),
+        ("task_resolved", "Task Resolved"),
     ]
 
     event_type = models.CharField(
