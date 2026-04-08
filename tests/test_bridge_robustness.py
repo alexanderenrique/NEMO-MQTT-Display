@@ -16,13 +16,19 @@ def bridge_no_lock():
             yield PostgresMQTTBridge(auto_start=False)
 
 
-def test_should_run_bridge_in_django_default():
-    assert should_run_bridge_in_django() is True
+def test_should_run_bridge_in_django_default(monkeypatch):
+    monkeypatch.delenv("NEMO_MQTT_BRIDGE_RUN_IN_DJANGO", raising=False)
+    assert should_run_bridge_in_django() is False
 
 
 def test_should_run_bridge_in_django_env_off(monkeypatch):
     monkeypatch.setenv("NEMO_MQTT_BRIDGE_RUN_IN_DJANGO", "0")
     assert should_run_bridge_in_django() is False
+
+
+def test_should_run_bridge_in_django_env_on(monkeypatch):
+    monkeypatch.setenv("NEMO_MQTT_BRIDGE_RUN_IN_DJANGO", "1")
+    assert should_run_bridge_in_django() is True
 
 
 def test_publish_to_mqtt_false_when_not_connected(bridge_no_lock):

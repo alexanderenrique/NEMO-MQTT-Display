@@ -60,6 +60,7 @@ try:
         start_mosquitto,
     )
     from NEMO_mqtt_bridge.bridge.mqtt_connection import connect_mqtt
+    from NEMO_mqtt_bridge.lifecycle_log import lifecycle_log_prefix
 except ImportError:
     from NEMO.plugins.NEMO_mqtt_bridge.connection_manager import ConnectionManager
     from NEMO.plugins.NEMO_mqtt_bridge.bridge.process_lock import acquire_lock, release_lock
@@ -68,6 +69,7 @@ except ImportError:
         start_mosquitto,
     )
     from NEMO.plugins.NEMO_mqtt_bridge.bridge.mqtt_connection import connect_mqtt
+    from NEMO.plugins.NEMO_mqtt_bridge.lifecycle_log import lifecycle_log_prefix
 
 logger = logging.getLogger(__name__)
 
@@ -175,7 +177,11 @@ class PostgresMQTTBridge:
         signal.signal(signal.SIGTERM, self._signal_handler)
 
     def _signal_handler(self, signum, frame):
-        logger.info("Received signal %s, shutting down", signum)
+        logger.info(
+            "%s Received signal %s, shutting down",
+            lifecycle_log_prefix(),
+            signum,
+        )
         self.stop()
         sys.exit(0)
 
@@ -184,7 +190,11 @@ class PostgresMQTTBridge:
         self._bridge_stop_done = False
         try:
             mode = "AUTO" if self.auto_start else "EXTERNAL"
-            logger.info("Starting PostgreSQL-MQTT Bridge (%s mode)", mode)
+            logger.info(
+                "%s Starting PostgreSQL-MQTT Bridge (%s mode)",
+                lifecycle_log_prefix(),
+                mode,
+            )
 
             self._initialize_pg()
 
@@ -196,7 +206,8 @@ class PostgresMQTTBridge:
                 self.mosquitto_process = start_mosquitto(self.config)
             elif not has_enabled:
                 logger.info(
-                    "No enabled MQTT configuration; bridge will idle until config is enabled"
+                    "%s No enabled MQTT configuration; bridge will idle until config is enabled",
+                    lifecycle_log_prefix(),
                 )
                 self.config = None
 
@@ -215,7 +226,10 @@ class PostgresMQTTBridge:
             self.thread = threading.Thread(target=self._run, daemon=True)
             self.thread.start()
 
-            logger.info("PostgreSQL-MQTT Bridge started successfully")
+            logger.info(
+                "%s PostgreSQL-MQTT Bridge started successfully",
+                lifecycle_log_prefix(),
+            )
             return True
         except Exception as e:
             logger.error("Failed to start bridge: %s", e)
@@ -235,7 +249,10 @@ class PostgresMQTTBridge:
         self.pg_conn = self.pg_connection_mgr.connect_with_retry(connect)
         self.pg_conn.cursor().execute(f"LISTEN {NOTIFY_CHANNEL_EVENTS}")
         self.pg_conn.cursor().execute(f"LISTEN {NOTIFY_CHANNEL_RELOAD}")
-        logger.info("Connected to PostgreSQL, listening for events")
+        logger.info(
+            "%s Connected to PostgreSQL, listening for events",
+            lifecycle_log_prefix(),
+        )
 
     def _reconnect_pg_listener(self):
         """Close and recreate the LISTEN connection after errors or disconnect."""
@@ -312,7 +329,10 @@ class PostgresMQTTBridge:
         self.last_connect_time = time.time()
         self._last_reconnect_fail_msg = None
         logger.info(
-            "Connected to MQTT broker at %s:%s", self.broker_host, self.broker_port
+            "%s Connected to MQTT broker at %s:%s",
+            lifecycle_log_prefix(),
+            self.broker_host,
+            self.broker_port,
         )
 
     def _on_connect(self, client, userdata, flags, rc):
@@ -320,13 +340,15 @@ class PostgresMQTTBridge:
             _write_bridge_status("connected")
             if self._mqtt_has_connected_before:
                 logger.info(
-                    "Successfully reconnected to MQTT broker at %s:%s",
+                    "%s Successfully reconnected to MQTT broker at %s:%s",
+                    lifecycle_log_prefix(),
                     self.broker_host,
                     self.broker_port,
                 )
             else:
                 logger.info(
-                    "Connected to MQTT broker at %s:%s",
+                    "%s Connected to MQTT broker at %s:%s",
+                    lifecycle_log_prefix(),
                     self.broker_host,
                     self.broker_port,
                 )
@@ -398,7 +420,11 @@ class PostgresMQTTBridge:
         Updates self._mqtt_config_fingerprint only after a successful apply (including
         disabled/no-config: disconnect and idle).
         """
-        logger.info("MQTT config reload (%s), reconnecting to broker", reason)
+        logger.info(
+            "%s MQTT config reload (%s), reconnecting to broker",
+            lifecycle_log_prefix(),
+            reason,
+        )
         try:
             from django.core.cache import cache
 
@@ -448,7 +474,7 @@ class PostgresMQTTBridge:
             else "INFO"
         )
         logger.setLevel(getattr(logging, level_name.upper(), logging.INFO))
-        logger.info("Starting consumption loop")
+        logger.info("%s Starting consumption loop", lifecycle_log_prefix())
 
         while self.running:
             try:
@@ -493,7 +519,7 @@ class PostgresMQTTBridge:
                 logger.error("Service loop error: %s", e)
                 time.sleep(1)
 
-        logger.info("Consumption loop stopped")
+        logger.info("%s Consumption loop stopped", lifecycle_log_prefix())
 
     def _process_pending_events(self):
         """Fetch unprocessed events and publish to MQTT."""
@@ -574,7 +600,10 @@ class PostgresMQTTBridge:
         if self._bridge_stop_done:
             return
         self._bridge_stop_done = True
-        logger.info("Stopping PostgreSQL-MQTT Bridge")
+        logger.info(
+            "%s Stopping PostgreSQL-MQTT Bridge",
+            lifecycle_log_prefix(),
+        )
         self.running = False
         if self.mqtt_client:
             self.mqtt_client.loop_stop()
@@ -598,7 +627,7 @@ class PostgresMQTTBridge:
             cleanup_existing_services(None)
         release_lock(self.lock_file)
         self.lock_file = None
-        logger.info("Bridge stopped")
+        logger.info("%s Bridge stopped", lifecycle_log_prefix())
 
 
 _mqtt_bridge_instance = None

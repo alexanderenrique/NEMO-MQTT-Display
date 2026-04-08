@@ -65,20 +65,42 @@ python manage.py migrate NEMO_mqtt_bridge
 
 1. `pip install nemo-mqtt-bridge`
 2. Add `'NEMO_mqtt_bridge'` to `INSTALLED_APPS` in your settings.
-3. (Optional) If you use Django's `LOGGING` setting, add a `NEMO_mqtt_bridge` logger with your preferred level and handlers (e.g. DEBUG in dev/test, INFO or WARNING in production). What and how you log is installation-dependent.
+3. (Optional) If you use Django's `LOGGING` setting, add a `NEMO_mqtt_bridge` logger with your preferred level and handlers (e.g. DEBUG in dev/test, INFO or WARNING in production). To correlate lines across **Gunicorn/Uvicorn workers**, include `%(process)d` (and optionally `%(thread)d`) in your log `format` string for the relevant handlers. Bridge lifecycle messages from this plugin also include a `[NEMO_mqtt_bridge pid=… thread=…]` prefix.
 4. Add `path("mqtt/", include("NEMO_mqtt_bridge.urls"))` to `NEMO/urls.py` (or run `python manage.py setup_nemo_integration --write-urls`). **Skip this step for Docker/pip installs**—NEMO auto-includes plugin URLs (see [Plugin URLs](#plugin-urls)).
 5. Run `python manage.py migrate NEMO_mqtt_bridge`.
 
 ### After install
 
 1. **Configure**: Open `/customization/mqtt/` in NEMO, set broker host/port (and auth if needed), enable the config.
-2. **Start NEMO** (e.g. `python manage.py runserver`). With the default AUTO mode, the plugin uses the PostgreSQL–MQTT bridge and an embedded MQTT broker (mqttools, pure Python) for development. No separate broker binary required.
+2. **Run the PostgreSQL–MQTT bridge** so queued events reach the broker. **By default the bridge does not start inside Django** (recommended for Docker and multi-worker servers). Start it as a **separate process**, e.g. `python -m NEMO_mqtt_bridge.postgres_mqtt_bridge` (second terminal, systemd unit, or a dedicated Docker Compose service—see [Docker](#docker) below). For **simple single-process dev** only, you may set `NEMO_MQTT_BRIDGE_RUN_IN_DJANGO=1` so `AppConfig.ready()` embeds the bridge in the same process as `runserver` (avoid with Gunicorn/Uvicorn and multiple workers).
+3. **Start NEMO** (e.g. `python manage.py runserver`). With the default AUTO mode, the bridge can use an embedded MQTT broker (mqttools, pure Python) for development. No separate Mosquitto binary required in that mode.
 
 **Production:** Use EXTERNAL mode so the plugin does not start or kill brokers. Set `NEMO_MQTT_BRIDGE_AUTO_START=0` (env) or `NEMO_MQTT_BRIDGE_AUTO_START = False` in Django settings. Then start the MQTT broker yourself, and run the bridge separately (e.g. `python -m NEMO_mqtt_bridge.postgres_mqtt_bridge` or as a systemd service).
 
-**Bridge in Django vs separate process:** By default the plugin starts the bridge inside the Django process (`AppConfig.ready`). To disable that and run only a standalone bridge, set `NEMO_MQTT_BRIDGE_RUN_IN_DJANGO=0` (env) or `NEMO_MQTT_BRIDGE_RUN_IN_DJANGO = False` in Django settings. The bridge can idle without an enabled MQTT config and pick up settings when you enable them, without restarting Django.
+**Bridge in Django vs separate process:** Django **writes to `MQTTEventQueue` and uses `pg_notify`** (via the DB publisher); it does not need a long-lived MQTT connection in the web workers. The **standalone bridge process** `LISTEN`s, drains the queue, and publishes to MQTT. **Default:** the bridge is **not** started inside Django. Set **`NEMO_MQTT_BRIDGE_RUN_IN_DJANGO=1`** (or `true` / `yes` / `on`) in the environment, or **`NEMO_MQTT_BRIDGE_RUN_IN_DJANGO = True`** in Django settings, to embed the bridge in-process (dev/simple installs). Set **`0`** / **`false`** / **`no`** / **`off`** to force off. The bridge can idle without an enabled MQTT config and pick up settings when you enable them, without restarting Django.
 
-**Docker:** You can run in AUTO mode with the embedded broker (no extra container) by default. The plugin uses mqttools (pure Python) as an in-process MQTT broker—no mosquitto binary needed. To use an external broker instead, set `NEMO_MQTT_BRIDGE_AUTO_START=0` and point NEMO's MQTT config to your broker (e.g. `broker_host=mqtt` if using a service named `mqtt` in docker-compose).
+**Docker:** Use the **same image and env** as the web app for a **second service** that runs only the bridge, for example:
+
+```yaml
+services:
+  nemo:
+    image: your-nemo-image
+    environment:
+      DJANGO_SETTINGS_MODULE: settings
+      # Optional explicit off (default since 2.2.0):
+      NEMO_MQTT_BRIDGE_RUN_IN_DJANGO: "0"
+    command: ["gunicorn", "..."]
+
+  nemo_mqtt_bridge:
+    image: your-nemo-image
+    environment:
+      DJANGO_SETTINGS_MODULE: settings
+    command: ["python", "-m", "NEMO_mqtt_bridge.postgres_mqtt_bridge"]
+    depends_on:
+      - nemo
+```
+
+Adjust service names, `depends_on`, and database/network settings to match your stack. You can run in AUTO mode with the embedded broker (mqttools) or set `NEMO_MQTT_BRIDGE_AUTO_START=0` and point MQTT customization at an external broker (e.g. `broker_host=mqtt` for a Compose service named `mqtt`).
 
 ### Plugin URLs
 
@@ -97,6 +119,6 @@ Both paths require login. If you get a 404, check which URL scheme your NEMO use
 
 ---
 
-- **Robustness roadmap:** Phases 1–5 in [docs/ROBUSTNESS_PLAN.md](docs/ROBUSTNESS_PLAN.md) are implemented in 2.1.5 (idle bridge until MQTT enabled, processed-only-on-publish, LISTEN reconnect, `close_old_connections`, `NEMO_MQTT_BRIDGE_RUN_IN_DJANGO`). Phase 6 items there remain optional.
+- **Robustness roadmap:** Phases 1–5 in [docs/ROBUSTNESS_PLAN.md](docs/ROBUSTNESS_PLAN.md) are implemented in 2.1.5 (idle bridge until MQTT enabled, processed-only-on-publish, LISTEN reconnect, `close_old_connections`, `NEMO_MQTT_BRIDGE_RUN_IN_DJANGO`). **2.2.0** changes the default so the bridge does not run in Django unless opted in. Phase 6 items in the robustness doc remain optional.
 - **Monitoring:** Connection status at `/mqtt_monitor/` (Docker) or `/mqtt/mqtt_monitor/` (manual URL include); CLI tools in `NEMO_mqtt_bridge.monitoring` (see `src/NEMO_mqtt_bridge/monitoring/README.md`).
 - **License:** MIT. [Issues](https://github.com/alexanderenrique/NEMO-MQTT-Plugin/issues) · [Discussions](https://github.com/alexanderenrique/NEMO-MQTT-Plugin/discussions)

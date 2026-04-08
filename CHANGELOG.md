@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.0] - 2026-04-08
+
+### Breaking changes
+
+- **Default: bridge does not run inside Django.** `should_run_bridge_in_django()` now defaults to **False** when the environment variable is unset and `NEMO_MQTT_BRIDGE_RUN_IN_DJANGO` is not set in Django settings. Run `python -m NEMO_mqtt_bridge.postgres_mqtt_bridge` as a separate process (recommended for Docker and multi-worker Gunicorn/Uvicorn). To restore the previous behavior (single-process dev), set **`NEMO_MQTT_BRIDGE_RUN_IN_DJANGO=1`** (or `true` / `yes` / `on`) in the environment, or **`NEMO_MQTT_BRIDGE_RUN_IN_DJANGO = True`** in settings.
+- **Environment variable symmetry:** `1` / `true` / `yes` / `on` explicitly enables the in-process bridge; `0` / `false` / `no` / `off` disables it.
+
+### Other
+
+- **Lifecycle logs:** Bridge and plugin startup/shutdown INFO lines are prefixed with `[NEMO_mqtt_bridge pid=… thread=…]` so multi-worker logs can be correlated. Integrators can also add `%(process)d` (and optionally `%(thread)d`) to their Django `LOGGING` format string for all loggers.
+
 ## [2.1.5] - 2026-04-08
 
 - **Immediate MQTT reconnect after config save**: `MQTTConfiguration` changes now trigger the bridge reload notification on DB transaction commit (`transaction.on_commit()`), so the bridge begins reconnecting as soon as the configuration is actually saved (instead of waiting for a longer surrounding transaction to finish).

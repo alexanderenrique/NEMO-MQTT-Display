@@ -42,7 +42,11 @@ Saving or deleting MQTT configuration in Django triggers `pg_notify` on `nemo_mq
 
 ## In-process bridge vs separate process
 
-By default the plugin starts the bridge from Django (`AppConfig.ready`). Set **`NEMO_MQTT_BRIDGE_RUN_IN_DJANGO=0`** (environment) or **`NEMO_MQTT_BRIDGE_RUN_IN_DJANGO = False`** in Django settings to skip that and run `python -m NEMO_mqtt_bridge.postgres_mqtt_bridge` (or systemd) only. The bridge can start with MQTT disabled and connect when you enable configuration—no Django restart required.
+**Default (2.2.0+):** the bridge **does not** start from Django (`AppConfig.ready`). Run **`python -m NEMO_mqtt_bridge.postgres_mqtt_bridge`** as its own process (systemd, Compose service, etc.). Django still enqueues events and sends **`pg_notify`**; the standalone bridge **LISTEN**s and publishes to MQTT.
+
+To embed the bridge in the **same process** as Django (single-process dev only; avoid with multiple Gunicorn/Uvicorn workers), set **`NEMO_MQTT_BRIDGE_RUN_IN_DJANGO=1`** (or `true` / `yes` / `on`) in the environment, or **`NEMO_MQTT_BRIDGE_RUN_IN_DJANGO = True`** in Django settings. Use **`0`** / **`false`** / **`no`** / **`off`** to force the standalone-only behavior.
+
+The bridge can start with MQTT disabled and connect when you enable configuration—no Django restart required.
 
 ## Usage
 

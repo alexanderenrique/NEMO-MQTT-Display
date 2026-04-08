@@ -6,6 +6,8 @@ import time
 
 from django.apps import AppConfig
 
+from .lifecycle_log import lifecycle_log_prefix
+
 logger = logging.getLogger(__name__)
 
 _bridge_atexit_registered = False
@@ -15,12 +17,21 @@ def should_run_bridge_in_django() -> bool:
     """
     When False, Django does not spawn the bridge thread; run
     python -m NEMO_mqtt_bridge.postgres_mqtt_bridge (or systemd) separately.
-    Env NEMO_MQTT_BRIDGE_RUN_IN_DJANGO=0 or Django setting NEMO_MQTT_BRIDGE_RUN_IN_DJANGO = False.
-    Default True for backward compatibility.
+
+    Env ``NEMO_MQTT_BRIDGE_RUN_IN_DJANGO``: ``1``/``true``/``yes``/``on``
+    enables in-process bridge; ``0``/``false``/``no``/``off`` disables.
+    If unset, the Django setting ``NEMO_MQTT_BRIDGE_RUN_IN_DJANGO`` is used
+    when present.
+
+    Default is False (standalone bridge; recommended for Docker/production).
+    Set env ``1`` or ``NEMO_MQTT_BRIDGE_RUN_IN_DJANGO = True`` in settings for
+    simple local dev without a separate bridge process.
     """
     env_val = os.environ.get("NEMO_MQTT_BRIDGE_RUN_IN_DJANGO", "").strip().lower()
     if env_val in ("0", "false", "no", "off"):
         return False
+    if env_val in ("1", "true", "yes", "on"):
+        return True
     try:
         from django.conf import settings
 
@@ -28,7 +39,7 @@ def should_run_bridge_in_django() -> bool:
             return bool(settings.NEMO_MQTT_BRIDGE_RUN_IN_DJANGO)
     except Exception:
         pass
-    return True
+    return False
 
 
 def _atexit_stop_mqtt_bridge():
@@ -53,15 +64,21 @@ class MqttPluginConfig(AppConfig):
     def ready(self):
         """
         Initialize the MQTT plugin when Django starts.
-        This sets up signal handlers and starts the PostgreSQL-MQTT Bridge service.
+        Registers signal handlers; may start the bridge in-process if enabled.
         """
         # Prevent multiple initializations during development auto-reload
         if self._initialized:
-            logger.info("MQTT plugin already initialized, skipping...")
+            logger.info(
+                "%s MQTT plugin already initialized, skipping...",
+                lifecycle_log_prefix(),
+            )
             return
 
         if self.get_migration_args():
-            logger.info("Migration detected, skipping MQTT plugin initialization")
+            logger.info(
+                "%s Migration detected, skipping MQTT plugin initialization",
+                lifecycle_log_prefix(),
+            )
             return
 
         # Check for NEMO dependencies (like nemo-publications plugin)
@@ -75,62 +92,84 @@ class MqttPluginConfig(AppConfig):
 
         # Import signal handlers to register them immediately
         try:
-            from . import signals
+            from . import signals  # noqa: F401
         except Exception as e:
             logger.warning(f"Failed to import signals: {e}")
 
         # Import customization to register it immediately
         try:
-            from . import customization
+            from . import customization  # noqa: F401
         except Exception as e:
             logger.warning(f"Failed to import customization: {e}")
 
         # Mark as initialized to prevent multiple calls
         self._initialized = True
-        logger.info("MQTT plugin initialization started")
+        logger.info(
+            "%s MQTT plugin initialization started",
+            lifecycle_log_prefix(),
+        )
 
-        # Initialize DB publisher for MQTT events; start bridge when configured to run in-process
+        # DB publisher for MQTT; start in-process bridge only if configured
         try:
             from .utils import get_mqtt_config
 
             config = get_mqtt_config()
-            logger.info("MQTT config result: %s", config)
+            logger.info("%s MQTT config result: %s", lifecycle_log_prefix(), config)
             if config and config.enabled:
                 logger.info(
-                    "MQTT plugin initialized with enabled config: %s",
+                    "%s MQTT plugin initialized with enabled config: %s",
+                    lifecycle_log_prefix(),
                     config.name,
                 )
-                logger.info("MQTT events will be published via PostgreSQL to MQTT broker")
+                logger.info(
+                    "%s MQTT events will be published via PostgreSQL to MQTT " "broker",
+                    lifecycle_log_prefix(),
+                )
             else:
                 logger.info(
-                    "MQTT plugin loaded without enabled configuration; "
-                    "bridge will idle until MQTT is enabled in customization"
+                    "%s MQTT plugin loaded without enabled configuration; "
+                    "bridge will idle until MQTT is enabled in customization",
+                    lifecycle_log_prefix(),
                 )
 
             if should_run_bridge_in_django():
                 self._start_external_mqtt_service()
             else:
                 logger.info(
-                    "NEMO_MQTT_BRIDGE_RUN_IN_DJANGO is disabled; start the bridge separately "
-                    "(e.g. python -m NEMO_mqtt_bridge.postgres_mqtt_bridge)"
+                    "%s NEMO_MQTT_BRIDGE_RUN_IN_DJANGO is disabled; start the "
+                    "bridge separately (e.g. python -m "
+                    "NEMO_mqtt_bridge.postgres_mqtt_bridge)",
+                    lifecycle_log_prefix(),
                 )
 
         except Exception as e:
-            logger.error("Failed to initialize MQTT plugin: %s", e)
+            logger.error(
+                "%s Failed to initialize MQTT plugin: %s",
+                lifecycle_log_prefix(),
+                e,
+            )
 
         logger.info(
-            "MQTT plugin: Signal handlers and customization registered. Events will be published via PostgreSQL."
+            "%s MQTT plugin: Signal handlers and customization registered. "
+            "Events will be published via PostgreSQL.",
+            lifecycle_log_prefix(),
         )
 
     def _start_external_mqtt_service(self):
         """Start the PostgreSQL-MQTT Bridge service in a daemon thread."""
         global _bridge_atexit_registered
         if self._auto_service_started:
-            logger.info("PostgreSQL-MQTT Bridge already started, skipping...")
+            logger.info(
+                "%s PostgreSQL-MQTT Bridge already started, skipping...",
+                lifecycle_log_prefix(),
+            )
             return
 
         try:
-            logger.info("Starting PostgreSQL-MQTT Bridge service in-process...")
+            logger.info(
+                "%s Starting PostgreSQL-MQTT Bridge service in-process...",
+                lifecycle_log_prefix(),
+            )
 
             from .postgres_mqtt_bridge import get_mqtt_bridge
 
@@ -142,7 +181,11 @@ class MqttPluginConfig(AppConfig):
                     while mqtt_bridge.running:
                         time.sleep(1)
                 except Exception as e:
-                    logger.error("PostgreSQL-MQTT Bridge error: %s", e)
+                    logger.error(
+                        "%s PostgreSQL-MQTT Bridge error: %s",
+                        lifecycle_log_prefix(),
+                        e,
+                    )
 
             mqtt_thread = threading.Thread(target=run_bridge_service, daemon=True)
             mqtt_thread.start()
@@ -151,16 +194,25 @@ class MqttPluginConfig(AppConfig):
             if not _bridge_atexit_registered:
                 atexit.register(_atexit_stop_mqtt_bridge)
                 _bridge_atexit_registered = True
-            logger.info("PostgreSQL-MQTT Bridge thread started")
+            logger.info(
+                "%s PostgreSQL-MQTT Bridge thread started",
+                lifecycle_log_prefix(),
+            )
 
         except Exception as e:
-            logger.error("Failed to start PostgreSQL-MQTT Bridge: %s", e)
+            logger.error(
+                "%s Failed to start PostgreSQL-MQTT Bridge: %s",
+                lifecycle_log_prefix(),
+                e,
+            )
             logger.info(
-                "MQTT events will still be enqueued, but the bridge process/thread is not running"
+                "%s MQTT events will still be enqueued, but the bridge "
+                "process/thread is not running",
+                lifecycle_log_prefix(),
             )
 
     def get_migration_args(self):
-        """Get migration-related command line arguments (migrate, makemigrations, showmigrations, etc.)"""
+        """CLI args for migrate, makemigrations, showmigrations, etc."""
         import sys
 
         return [
@@ -170,13 +222,16 @@ class MqttPluginConfig(AppConfig):
         ]
 
     def disconnect_mqtt(self):
-        """Stop the in-process bridge (releases lock, disconnects MQTT and PostgreSQL)."""
+        """Stop in-process bridge (lock, MQTT, PostgreSQL)."""
         try:
             from .postgres_mqtt_bridge import get_mqtt_bridge
 
             bridge = get_mqtt_bridge()
             if bridge.running:
                 bridge.stop()
-                logger.info("PostgreSQL-MQTT Bridge stopped")
+                logger.info(
+                    "%s PostgreSQL-MQTT Bridge stopped",
+                    lifecycle_log_prefix(),
+                )
         except Exception as e:
             logger.debug("disconnect_mqtt: %s", e)
