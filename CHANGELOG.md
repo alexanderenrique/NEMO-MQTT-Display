@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.5] - 2026-04-08
+
+- **Immediate MQTT reconnect after config save**: `MQTTConfiguration` changes now trigger the bridge reload notification on DB transaction commit (`transaction.on_commit()`), so the bridge begins reconnecting as soon as the configuration is actually saved (instead of waiting for a longer surrounding transaction to finish).
+- **Faster bridge status updates in the UI**: Added a `/mqtt_bridge_status/` JSON endpoint and 2-second polling on the monitor page and MQTT customization page so “Connected / Disconnected” reflects the real bridge state quickly without manual refresh.
+
 ## [2.1.4] - 2026-04-07
 
 - **Reliable MQTT config reload**: The PostgreSQL–MQTT bridge reapplies broker settings when `MQTTConfiguration` changes, not only via `LISTEN nemo_mqtt_reload`. On the same interval as the event queue poll (default 2s), it compares the enabled row’s `(id, updated_at)` to the last successful connection; if different, it reloads from the database, reconnects (or disconnects if disabled), and drains `MQTTEventQueue` once. This matches the queue’s NOTIFY+polling pattern and fixes missed reload notifications (e.g. connection poolers). `MQTTConfiguration` **delete** now also sends `nemo_mqtt_reload` (previously only the Django cache was cleared).

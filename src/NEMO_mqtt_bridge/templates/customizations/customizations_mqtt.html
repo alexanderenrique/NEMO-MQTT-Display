@@ -330,6 +330,72 @@
             <strong>MQTT is disabled</strong> - No events will be published.
         </div>
     {% endif %}
+
+    <h4>Status / Debug</h4>
+    <div class="table-responsive">
+        <table class="table table-striped table-condensed">
+            <tbody>
+                <tr>
+                    <th style="width: 240px;">Bridge status (from DB)</th>
+                    <td>
+                        <span id="mqtt-bridge-status-value">
+                            {% if bridge_status %}
+                                <code>{{ bridge_status }}</code>
+                            {% else %}
+                                <span class="text-muted">(unknown)</span>
+                            {% endif %}
+                        </span>
+                    </td>
+                </tr>
+                <tr>
+                    <th>Config last updated</th>
+                    <td><code>{{ config.updated_at|date:"M d, Y H:i:s" }}</code></td>
+                </tr>
+                <tr>
+                    <th>Pending queue rows</th>
+                    <td><code>{{ pending_queue_count }}</code></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    {% if recent_queue_events %}
+        <h4>Recent Queue Rows (PostgreSQL)</h4>
+        <div class="table-responsive">
+            <table class="table table-striped table-condensed">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Topic</th>
+                        <th>Processed</th>
+                        <th>QoS</th>
+                        <th>Retain</th>
+                        <th>Created</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ev in recent_queue_events %}
+                    <tr>
+                        <td>{{ ev.id }}</td>
+                        <td><code>{{ ev.topic }}</code></td>
+                        <td>
+                            {% if ev.processed %}
+                                <span class="label label-success">Yes</span>
+                            {% else %}
+                                <span class="label label-warning">No</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ ev.qos }}</td>
+                        <td>{{ ev.retain }}</td>
+                        <td>{{ ev.created_at|date:"M d, Y H:i:s" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="text-muted">No recent MQTT queue rows found.</p>
+    {% endif %}
     
     {% if recent_messages %}
         <h4>Recent MQTT Messages</h4>
@@ -361,8 +427,6 @@
                 </tbody>
             </table>
         </div>
-    {% else %}
-        <p class="text-muted">No recent MQTT messages found.</p>
     {% endif %}
 </div>
 
@@ -377,4 +441,26 @@ function toggleHmacFields() {
         hmacFields.style.display = 'none';
     }
 }
+
+(function() {
+    function renderBridgeStatus(status) {
+        var el = document.getElementById('mqtt-bridge-status-value');
+        if (!el) return;
+        if (status === 'connected' || status === 'disconnected') {
+            el.innerHTML = '<code>' + status + '</code>';
+        } else {
+            el.innerHTML = '<span class="text-muted">(unknown)</span>';
+        }
+    }
+
+    function poll() {
+        fetch("{% url 'mqtt_plugin:bridge_status' %}", { credentials: 'same-origin', cache: 'no-store' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) { renderBridgeStatus(data && data.status); })
+            .catch(function() { /* ignore */ });
+    }
+
+    poll();
+    setInterval(poll, 2000);
+})();
 </script>

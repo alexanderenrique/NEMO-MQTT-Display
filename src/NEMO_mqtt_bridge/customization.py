@@ -6,7 +6,7 @@ import logging
 
 from NEMO.decorators import customization
 from NEMO.views.customization import CustomizationBase
-from .models import MQTTConfiguration, MQTTEventFilter, MQTTMessageLog
+from .models import MQTTConfiguration, MQTTEventFilter, MQTTEventQueue, MQTTMessageLog
 
 # Event types shown as checkboxes on the MQTT customization page.
 # We keep the underlying event keys separate, but the UI groups some of them.
@@ -101,6 +101,18 @@ class MQTTCustomization(CustomizationBase):
         )
 
         recent_messages = MQTTMessageLog.objects.order_by("-sent_at")[:5]
+        pending_queue_count = MQTTEventQueue.objects.filter(processed=False).count()
+        recent_queue_events = (
+            MQTTEventQueue.objects.order_by("-id").values(
+                "id", "topic", "qos", "retain", "processed", "created_at"
+            )[:5]
+        )
+        try:
+            from .db_publisher import db_publisher
+
+            bridge_status = db_publisher.get_bridge_status()
+        except Exception:
+            bridge_status = None
 
         # Build dict of event_type -> enabled for checkbox event types (default True if no row)
         try:
@@ -120,6 +132,9 @@ class MQTTCustomization(CustomizationBase):
                 "config": config,
                 "recent_messages": recent_messages,
                 "mqtt_event_filters": mqtt_event_filters,
+                "bridge_status": bridge_status,
+                "pending_queue_count": pending_queue_count,
+                "recent_queue_events": list(recent_queue_events),
             }
         )
 

@@ -4,6 +4,7 @@ Views for MQTT plugin.
 
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
 
 
 @login_required
@@ -32,3 +33,20 @@ def mqtt_monitor(request):
     response["Pragma"] = "no-cache"
     response["Expires"] = "0"
     return response
+
+
+@login_required
+def mqtt_bridge_status(request):
+    """Return current bridge status from DB as JSON."""
+    status = None
+    updated_at = None
+    try:
+        from .models import MQTTBridgeStatus
+
+        row = MQTTBridgeStatus.objects.filter(key="default").first()
+        if row:
+            status = row.status
+            updated_at = row.updated_at.isoformat() if row.updated_at else None
+    except Exception:
+        pass
+    return JsonResponse({"status": status, "updated_at": updated_at})

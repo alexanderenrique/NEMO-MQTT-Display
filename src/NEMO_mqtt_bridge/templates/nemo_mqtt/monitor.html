@@ -73,13 +73,15 @@
         </div>
         <div class="status-row">
             <strong>Connection</strong>
-            {% if broker_connected == 'connected' %}
-                <span class="badge badge-success">Connected</span>
-            {% elif broker_connected == 'disconnected' %}
-                <span class="badge badge-danger">Disconnected</span>
-            {% else %}
-                <span class="badge badge-secondary">Unknown</span>
-            {% endif %}
+            <span id="mqtt-bridge-connection-badge">
+                {% if broker_connected == 'connected' %}
+                    <span class="badge badge-success">Connected</span>
+                {% elif broker_connected == 'disconnected' %}
+                    <span class="badge badge-danger">Disconnected</span>
+                {% else %}
+                    <span class="badge badge-secondary">Unknown</span>
+                {% endif %}
+            </span>
         </div>
     </div>
     {% else %}
@@ -92,5 +94,29 @@
 {% endblock %}
 
 {% block extra_js %}
-<!-- extra_js block removed to avoid duplicate function declarations -->
+<script>
+(function() {
+    function renderBridgeStatus(status) {
+        var el = document.getElementById('mqtt-bridge-connection-badge');
+        if (!el) return;
+        if (status === 'connected') {
+            el.innerHTML = '<span class="badge badge-success">Connected</span>';
+        } else if (status === 'disconnected') {
+            el.innerHTML = '<span class="badge badge-danger">Disconnected</span>';
+        } else {
+            el.innerHTML = '<span class="badge badge-secondary">Unknown</span>';
+        }
+    }
+
+    function poll() {
+        fetch("{% url 'mqtt_plugin:bridge_status' %}", { credentials: 'same-origin', cache: 'no-store' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) { renderBridgeStatus(data && data.status); })
+            .catch(function() { /* ignore */ });
+    }
+
+    poll();
+    setInterval(poll, 2000);
+})();
+</script>
 {% endblock %}

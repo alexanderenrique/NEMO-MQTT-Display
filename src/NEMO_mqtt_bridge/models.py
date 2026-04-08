@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.cache import cache
+from django.db import transaction
 from django.db.models.signals import post_save, post_delete
 from django.db.models import Q
 from django.dispatch import receiver
@@ -259,16 +260,22 @@ class MQTTEventFilter(models.Model):
 @receiver(post_save, sender=MQTTConfiguration)
 def clear_mqtt_config_cache_on_save(sender, instance, **kwargs):
     """Clear the MQTT configuration cache when a configuration is saved and notify bridge to reload."""
-    cache.delete("mqtt_active_config")
-    from .db_publisher import notify_bridge_reload_config
+    def _after_commit():
+        cache.delete("mqtt_active_config")
+        from .db_publisher import notify_bridge_reload_config
 
-    notify_bridge_reload_config()
+        notify_bridge_reload_config()
+
+    transaction.on_commit(_after_commit)
 
 
 @receiver(post_delete, sender=MQTTConfiguration)
 def clear_mqtt_config_cache_on_delete(sender, instance, **kwargs):
     """Clear the MQTT configuration cache when a configuration is deleted."""
-    cache.delete("mqtt_active_config")
-    from .db_publisher import notify_bridge_reload_config
+    def _after_commit():
+        cache.delete("mqtt_active_config")
+        from .db_publisher import notify_bridge_reload_config
 
-    notify_bridge_reload_config()
+        notify_bridge_reload_config()
+
+    transaction.on_commit(_after_commit)
