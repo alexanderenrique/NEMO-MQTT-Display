@@ -336,7 +336,15 @@
         <table class="table table-striped table-condensed">
             <tbody>
                 <tr>
-                    <th style="width: 240px;">Bridge status (from DB)</th>
+                    <th style="width: 240px;">Bridge process (consumption loop)</th>
+                    <td>
+                        <span id="mqtt-bridge-heartbeat-summary"></span>
+                        <span id="mqtt-bridge-heartbeat-at" style="margin-left: 8px;"></span>
+                        <span id="mqtt-bridge-heartbeat-age" class="text-muted" style="margin-left: 8px;"></span>
+                    </td>
+                </tr>
+                <tr>
+                    <th>MQTT broker connection</th>
                     <td>
                         <span id="mqtt-bridge-status-value">
                             {% if bridge_status %}
@@ -348,7 +356,7 @@
                     </td>
                 </tr>
                 <tr>
-                    <th>Bridge status updated</th>
+                    <th>Broker connection (DB row) updated</th>
                     <td>
                         <span id="mqtt-bridge-status-updated-at">
                             <span class="text-muted">(unknown)</span>
@@ -367,6 +375,11 @@
             </tbody>
         </table>
     </div>
+    {% if not config.enabled %}
+    <p class="help-block light-grey" style="margin-top: 8px;">
+        When MQTT is disabled, the bridge process may still run and update its heartbeat; the broker line may stay disconnected.
+    </p>
+    {% endif %}
 
     <div class="customization-separation" style="margin: 10px 0;"></div>
 
@@ -382,8 +395,13 @@
 
     <div id="mqtt-debug-details" style="display: none;">
         <h4>Diagnostics (copy)</h4>
-        <pre id="mqtt-diagnostics-snapshot" style="white-space: pre-wrap; word-break: break-word; margin-bottom: 15px;">Bridge
-  status: <span id="mqtt-diag-bridge-status">{% if bridge_status %}{{ bridge_status }}{% else %}(unknown){% endif %}</span>
+        <pre id="mqtt-diagnostics-snapshot" style="white-space: pre-wrap; word-break: break-word; margin-bottom: 15px;">Bridge process (consumption loop)
+  last_heartbeat: <span id="mqtt-diag-heartbeat-at">{% if bridge_last_heartbeat_iso %}{{ bridge_last_heartbeat_iso }}{% else %}(none){% endif %}</span>
+  heartbeat_age: <span id="mqtt-diag-heartbeat-age">(unknown)</span>
+  process_health: <span id="mqtt-diag-process-health">(unknown)</span>
+
+MQTT broker
+  connection: <span id="mqtt-diag-bridge-status">{% if bridge_status %}{{ bridge_status }}{% else %}(unknown){% endif %}</span>
   status_updated_at: <span id="mqtt-diag-bridge-updated-at">(unknown)</span>
   status_age: <span id="mqtt-diag-bridge-age">(unknown)</span>
 
@@ -528,6 +546,50 @@ function toggleHmacFields() {
         return Math.round(seconds / 86400) + 'd ago';
     }
 
+    /** Heartbeat fresher than this (seconds) => bridge consumption loop considered healthy (interval is 15s server-side). */
+    var HEARTBEAT_OK_MAX_AGE_SEC = 60;
+
+    function renderBridgeHeartbeat(iso) {
+        var summaryEl = document.getElementById('mqtt-bridge-heartbeat-summary');
+        var atEl = document.getElementById('mqtt-bridge-heartbeat-at');
+        var ageEl = document.getElementById('mqtt-bridge-heartbeat-age');
+        var diagAt = document.getElementById('mqtt-diag-heartbeat-at');
+        var diagAge = document.getElementById('mqtt-diag-heartbeat-age');
+        var diagHealth = document.getElementById('mqtt-diag-process-health');
+        if (!summaryEl || !atEl || !ageEl) return;
+
+        if (!iso) {
+            summaryEl.innerHTML = '<span class="label label-default">No reports yet</span>';
+            atEl.innerHTML = '';
+            ageEl.textContent = '';
+            if (diagAt) diagAt.textContent = '(none)';
+            if (diagAge) diagAge.textContent = '(n/a)';
+            if (diagHealth) diagHealth.textContent = 'no_data';
+            return;
+        }
+        var d = new Date(iso);
+        if (isNaN(d.getTime())) {
+            summaryEl.innerHTML = '<span class="text-muted">(invalid)</span>';
+            atEl.innerHTML = '';
+            ageEl.textContent = '';
+            if (diagAt) diagAt.textContent = '(invalid)';
+            if (diagAge) diagAge.textContent = '(unknown)';
+            if (diagHealth) diagHealth.textContent = 'unknown';
+            return;
+        }
+        var ageSeconds = (Date.now() - d.getTime()) / 1000;
+        var isStale = ageSeconds > HEARTBEAT_OK_MAX_AGE_SEC;
+        summaryEl.innerHTML = isStale
+            ? '<span class="label label-warning">Stale</span>'
+            : '<span class="label label-success">Running</span>';
+        atEl.innerHTML = '<code>' + d.toLocaleString() + '</code>';
+        ageEl.textContent = '(' + formatAge(ageSeconds) + (isStale ? ', stale' : '') + ')';
+        ageEl.className = isStale ? 'text-warning' : 'text-muted';
+        if (diagAt) diagAt.textContent = d.toISOString();
+        if (diagAge) diagAge.textContent = formatAge(ageSeconds) + (isStale ? ' (stale)' : '');
+        if (diagHealth) diagHealth.textContent = isStale ? 'stale' : 'running_ok';
+    }
+
     function renderBridgeStatus(status) {
         var el = document.getElementById('mqtt-bridge-status-value');
         if (!el) return;
@@ -586,6 +648,7 @@ function toggleHmacFields() {
         fetch("{% url 'mqtt_plugin:bridge_status' %}", { credentials: 'same-origin', cache: 'no-store' })
             .then(function(r) { return r.json(); })
             .then(function(data) {
+                renderBridgeHeartbeat(data && data.last_heartbeat);
                 renderBridgeStatus(data && data.status);
                 renderBridgeUpdatedAt(data && data.updated_at);
             })
@@ -593,6 +656,11 @@ function toggleHmacFields() {
     }
 
     initDebugToggle();
+    {% if bridge_last_heartbeat_iso %}
+    renderBridgeHeartbeat('{{ bridge_last_heartbeat_iso|escapejs }}');
+    {% else %}
+    renderBridgeHeartbeat(null);
+    {% endif %}
     poll();
     setInterval(poll, 2000);
 })();

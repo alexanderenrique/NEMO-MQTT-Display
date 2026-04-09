@@ -131,6 +131,16 @@ class MQTTCustomization(CustomizationBase):
         except Exception:
             bridge_status = None
 
+        bridge_last_heartbeat_iso = None
+        try:
+            from .models import MQTTBridgeStatus
+
+            hb_row = MQTTBridgeStatus.objects.filter(key="default").first()
+            if hb_row and hb_row.last_heartbeat:
+                bridge_last_heartbeat_iso = hb_row.last_heartbeat.isoformat()
+        except Exception:
+            pass
+
         # Build dict of event_type -> enabled for checkbox event types (default True if no row)
         try:
             filters = {
@@ -150,6 +160,7 @@ class MQTTCustomization(CustomizationBase):
                 "recent_messages": recent_messages,
                 "mqtt_event_filters": mqtt_event_filters,
                 "bridge_status": bridge_status,
+                "bridge_last_heartbeat_iso": bridge_last_heartbeat_iso,
                 "pending_queue_count": pending_queue_count,
                 "pending_queue_oldest": pending_queue_oldest,
                 "pending_queue_newest": pending_queue_newest,
