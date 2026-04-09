@@ -6,8 +6,10 @@ import pytest
 
 from NEMO_mqtt_bridge.bridge import process_lock as pl
 from NEMO_mqtt_bridge.bridge_spawn import (
+    _build_bridge_command,
     should_skip_spawn_for_cli,
     should_spawn_bridge_subprocess,
+    should_spawn_use_supervisor,
     spawn_bridge_subprocess_if_needed,
 )
 
@@ -32,6 +34,41 @@ def test_should_spawn_subprocess_env_on(monkeypatch):
 def test_should_spawn_subprocess_env_off(monkeypatch):
     monkeypatch.setenv("NEMO_MQTT_BRIDGE_SPAWN_SUBPROCESS", "0")
     assert should_spawn_bridge_subprocess() is False
+
+
+def test_should_spawn_subprocess_unset_defaults_true(monkeypatch):
+    monkeypatch.delenv("NEMO_MQTT_BRIDGE_SPAWN_SUBPROCESS", raising=False)
+    assert should_spawn_bridge_subprocess() is True
+
+
+def test_should_spawn_use_supervisor_unset_defaults_true(monkeypatch):
+    monkeypatch.delenv("NEMO_MQTT_BRIDGE_SPAWN_USE_SUPERVISOR", raising=False)
+    assert should_spawn_use_supervisor() is True
+
+
+def test_should_spawn_use_supervisor_env_off(monkeypatch):
+    monkeypatch.setenv("NEMO_MQTT_BRIDGE_SPAWN_USE_SUPERVISOR", "0")
+    assert should_spawn_use_supervisor() is False
+
+
+def test_build_bridge_command_uses_supervisor_by_default(monkeypatch):
+    monkeypatch.delenv("NEMO_MQTT_BRIDGE_SPAWN_USE_SUPERVISOR", raising=False)
+    with patch(
+        "NEMO_mqtt_bridge.postgres_mqtt_bridge._should_auto_start_mosquitto",
+        return_value=False,
+    ):
+        cmd = _build_bridge_command()
+    assert "NEMO_mqtt_bridge.bridge_supervisor" in cmd[2]
+
+
+def test_build_bridge_command_plain_when_supervisor_off(monkeypatch):
+    monkeypatch.setenv("NEMO_MQTT_BRIDGE_SPAWN_USE_SUPERVISOR", "0")
+    with patch(
+        "NEMO_mqtt_bridge.postgres_mqtt_bridge._should_auto_start_mosquitto",
+        return_value=False,
+    ):
+        cmd = _build_bridge_command()
+    assert cmd[2] == "NEMO_mqtt_bridge.postgres_mqtt_bridge"
 
 
 def test_should_skip_spawn_skip_env(monkeypatch):

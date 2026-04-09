@@ -2,13 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
-## [2.2.2] - 2026-04-08
+## [2.2.3] - 2026-04-08
 
-### Opt-in subprocess bridge spawn from Django
+### Subprocess bridge spawn from Django (default on)
 
-- **`NEMO_MQTT_BRIDGE_SPAWN_SUBPROCESS`:** When enabled (`1` / `true` / `yes` / `on` or Django setting), `AppConfig.ready()` starts a **daemon thread** that (after random **jitter** up to `NEMO_MQTT_BRIDGE_SPAWN_JITTER_SEC`, default 1s) acquires a **launcher flock** (`NEMO_mqtt_bridge.launcher.lock`), checks **`bridge_process_running()`** via the bridge lock PID, and if not running spawns a **detached** `python -m NEMO_mqtt_bridge.postgres_mqtt_bridge` (`start_new_session=True`). Holds the launcher until the child appears in the bridge lock or **`NEMO_MQTT_BRIDGE_SPAWN_LOCK_WAIT_SEC`** (default 15s). Mutually exclusive with **`NEMO_MQTT_BRIDGE_RUN_IN_DJANGO`**: if both are set, logs an error and uses the **in-process thread only**.
-- **`NEMO_MQTT_BRIDGE_SPAWN_USE_SUPERVISOR`:** Spawn **`bridge_supervisor`** instead of the bridge module; passes `--auto` / `--db-health` when matching env flags.
-- **CLI skip:** No spawn during listed `manage.py` subcommands (`migrate`, `test`, `collectstatic`, `shell`, …) or when **`NEMO_MQTT_BRIDGE_SPAWN_SKIP=1`** (tests set this by default in `tests/test_settings.py`).
+- **`NEMO_MQTT_BRIDGE_SPAWN_SUBPROCESS`:** **On by default.** `AppConfig.ready()` starts a **daemon thread** that (after random **jitter** up to `NEMO_MQTT_BRIDGE_SPAWN_JITTER_SEC`, default 1s) acquires a **launcher flock** (`NEMO_mqtt_bridge.launcher.lock`), checks **`bridge_process_running()`** via the bridge lock PID, and if not running spawns a **detached** subprocess (`start_new_session=True`). Set to **`0`** / **`false`** / **`no`** / **`off`** (env or Django setting) to disable and run the bridge manually. Holds the launcher until the child appears in the bridge lock or **`NEMO_MQTT_BRIDGE_SPAWN_LOCK_WAIT_SEC`** (default 15s). If **`NEMO_MQTT_BRIDGE_RUN_IN_DJANGO`** is also enabled, logs an error and uses **detached subprocess only** (never in-process).
+- **`NEMO_MQTT_BRIDGE_SPAWN_USE_SUPERVISOR`:** **On by default** for the spawn path: runs **`bridge_supervisor`** instead of **`postgres_mqtt_bridge`** directly. Set to **`0`** / **`false`** / **`no`** / **`off`** to spawn the plain bridge module. Passes `--auto` / `--db-health` when matching env flags.
+- **CLI skip:** No spawn during listed `manage.py` subcommands (`migrate`, `test`, `collectstatic`, `shell`, …) or when **`NEMO_MQTT_BRIDGE_SPAWN_SKIP=1`**. **`tests/test_settings.py`** sets **`NEMO_MQTT_BRIDGE_SPAWN_SKIP`** and **`NEMO_MQTT_BRIDGE_SPAWN_SUBPROCESS=0`** by default so pytest does not start a real bridge.
 - **`process_lock`:** New **`read_bridge_lock_pid()`** and **`bridge_process_running()`** helpers for spawn logic.
 
 ## [2.2.1] - 2026-04-08

@@ -48,7 +48,7 @@ For **Docker Compose**, add a **second service** with the same image and DB-rela
 
 For **automatic restart** of the bridge process (exponential backoff; optional DB heartbeat watchdog), use **`python -m NEMO_mqtt_bridge.bridge_supervisor`** or **`nemo-mqtt-bridge-supervisor`** as the container command instead of `postgres_mqtt_bridge`—see the main README supervisor paragraph.
 
-For **opt-in spawn from Django** (single container, detached subprocess, not in Gunicorn workers), see **`NEMO_MQTT_BRIDGE_SPAWN_SUBPROCESS`** in the main [README.md](../../../README.md).
+For **auto-spawn from Django** (default: single container, detached **`bridge_supervisor`**, not in Gunicorn workers), see **`NEMO_MQTT_BRIDGE_SPAWN_SUBPROCESS`** / **`NEMO_MQTT_BRIDGE_SPAWN_USE_SUPERVISOR`** in the main [README.md](../../../README.md).
 
 To embed the bridge in the **same process** as Django (single-process dev only; avoid with multiple Gunicorn/Uvicorn workers), set **`NEMO_MQTT_BRIDGE_RUN_IN_DJANGO=1`** (or `true` / `yes` / `on`) in the environment, or **`NEMO_MQTT_BRIDGE_RUN_IN_DJANGO = True`** in Django settings. Use **`0`** / **`false`** / **`no`** / **`off`** to force the standalone-only behavior.
 

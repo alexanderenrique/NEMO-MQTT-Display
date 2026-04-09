@@ -65,7 +65,8 @@ class MqttPluginConfig(AppConfig):
     def ready(self):
         """
         Initialize the MQTT plugin when Django starts.
-        Registers signal handlers; may start the bridge in-process if enabled.
+        Registers signal handlers; may auto-spawn a detached bridge/supervisor
+        (default) or start the bridge in-process if ``NEMO_MQTT_BRIDGE_RUN_IN_DJANGO``.
         """
         # Prevent multiple initializations during development auto-reload
         if self._initialized:
@@ -133,25 +134,29 @@ class MqttPluginConfig(AppConfig):
                     lifecycle_log_prefix(),
                 )
 
-            if should_run_bridge_in_django():
-                from .bridge_spawn import should_spawn_bridge_subprocess
+            from .bridge_spawn import should_spawn_bridge_subprocess
 
-                if should_spawn_bridge_subprocess():
-                    logger.error(
-                        "%s Both NEMO_MQTT_BRIDGE_RUN_IN_DJANGO and "
-                        "NEMO_MQTT_BRIDGE_SPAWN_SUBPROCESS are enabled; using "
-                        "in-process bridge only (disable one of them)",
-                        lifecycle_log_prefix(),
-                    )
+            run_in_django = should_run_bridge_in_django()
+            spawn_subprocess = should_spawn_bridge_subprocess()
+
+            if run_in_django and spawn_subprocess:
+                logger.error(
+                    "%s Both NEMO_MQTT_BRIDGE_RUN_IN_DJANGO and "
+                    "NEMO_MQTT_BRIDGE_SPAWN_SUBPROCESS are enabled; using "
+                    "detached subprocess only (not in-process)",
+                    lifecycle_log_prefix(),
+                )
+                if self._should_start_spawn_bridge_thread():
+                    self._start_bridge_subprocess_spawn_thread()
+            elif run_in_django:
                 self._start_external_mqtt_service()
             elif self._should_start_spawn_bridge_thread():
                 self._start_bridge_subprocess_spawn_thread()
             else:
                 logger.info(
-                    "%s NEMO_MQTT_BRIDGE_RUN_IN_DJANGO is disabled; start the "
-                    "bridge separately (e.g. python -m "
-                    "NEMO_mqtt_bridge.postgres_mqtt_bridge) or set "
-                    "NEMO_MQTT_BRIDGE_SPAWN_SUBPROCESS=1 to auto-spawn",
+                    "%s Auto-spawn is disabled (NEMO_MQTT_BRIDGE_SPAWN_SUBPROCESS=0); "
+                    "start the bridge separately (e.g. python -m "
+                    "NEMO_mqtt_bridge.postgres_mqtt_bridge or a Compose service)",
                     lifecycle_log_prefix(),
                 )
 
@@ -258,7 +263,8 @@ class MqttPluginConfig(AppConfig):
         t = threading.Thread(target=_run, daemon=True, name="mqtt_bridge_spawn")
         t.start()
         logger.info(
-            "%s Bridge subprocess spawn thread started (NEMO_MQTT_BRIDGE_SPAWN_SUBPROCESS)",
+            "%s Bridge subprocess spawn thread started (default: auto-spawn; "
+            "supervisor unless NEMO_MQTT_BRIDGE_SPAWN_USE_SUPERVISOR=0)",
             lifecycle_log_prefix(),
         )
 

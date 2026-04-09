@@ -1,6 +1,7 @@
 """
-Opt-in: spawn postgres_mqtt_bridge (or bridge_supervisor) as a detached subprocess
-from Django workers. Uses launcher flock + jitter + PID check to limit duplicate spawns.
+Spawn postgres_mqtt_bridge (or bridge_supervisor) as a detached subprocess from Django
+workers. Enabled by default; use launcher flock + jitter + PID check to limit duplicate
+spawns. Disable with ``NEMO_MQTT_BRIDGE_SPAWN_SUBPROCESS=0`` (or Django setting).
 """
 
 from __future__ import annotations
@@ -28,8 +29,10 @@ def should_spawn_bridge_subprocess() -> bool:
     """
     When True, AppConfig may start a daemon thread that spawns the bridge subprocess.
 
-    Env ``NEMO_MQTT_BRIDGE_SPAWN_SUBPROCESS``: ``1``/``true``/``yes``/``on`` enables.
-    Django setting ``NEMO_MQTT_BRIDGE_SPAWN_SUBPROCESS`` is used if present when env unset.
+    **Default True** (external bridge). Set env ``NEMO_MQTT_BRIDGE_SPAWN_SUBPROCESS`` to
+    ``0``/``false``/``no``/``off`` to disable and run the bridge manually. Affirmative env
+    values keep spawn on. Django setting ``NEMO_MQTT_BRIDGE_SPAWN_SUBPROCESS`` is used
+    when present and env is unset.
     """
     env_val = os.environ.get("NEMO_MQTT_BRIDGE_SPAWN_SUBPROCESS", "").strip().lower()
     if env_val in ("0", "false", "no", "off"):
@@ -43,7 +46,33 @@ def should_spawn_bridge_subprocess() -> bool:
             return bool(settings.NEMO_MQTT_BRIDGE_SPAWN_SUBPROCESS)
     except Exception:
         pass
-    return False
+    return True
+
+
+def should_spawn_use_supervisor() -> bool:
+    """
+    When True, the spawned command is ``bridge_supervisor`` (auto-restart) instead of
+    ``postgres_mqtt_bridge`` directly.
+
+    **Default True.** Set ``NEMO_MQTT_BRIDGE_SPAWN_USE_SUPERVISOR`` to ``0``/``false``/
+    ``no``/``off`` to spawn the plain bridge module. Django setting
+    ``NEMO_MQTT_BRIDGE_SPAWN_USE_SUPERVISOR`` applies when env is unset.
+    """
+    env_val = os.environ.get(
+        "NEMO_MQTT_BRIDGE_SPAWN_USE_SUPERVISOR", ""
+    ).strip().lower()
+    if env_val in ("0", "false", "no", "off"):
+        return False
+    if env_val in ("1", "true", "yes", "on"):
+        return True
+    try:
+        from django.conf import settings
+
+        if hasattr(settings, "NEMO_MQTT_BRIDGE_SPAWN_USE_SUPERVISOR"):
+            return bool(settings.NEMO_MQTT_BRIDGE_SPAWN_USE_SUPERVISOR)
+    except Exception:
+        pass
+    return True
 
 
 def should_skip_spawn_for_cli() -> bool:
@@ -125,7 +154,7 @@ def _release_launcher_lock(lf) -> None:
 def _build_bridge_command() -> list:
     from NEMO_mqtt_bridge.postgres_mqtt_bridge import _should_auto_start_mosquitto
 
-    if env_truthy("NEMO_MQTT_BRIDGE_SPAWN_USE_SUPERVISOR"):
+    if should_spawn_use_supervisor():
         cmd = [sys.executable, "-m", "NEMO_mqtt_bridge.bridge_supervisor"]
         if _should_auto_start_mosquitto():
             cmd.append("--auto")
