@@ -5,6 +5,7 @@ Robust Connection Manager with exponential backoff and circuit breaker pattern
 import time
 import random
 import logging
+import threading
 from typing import Callable, Optional, Any
 from enum import Enum
 
@@ -68,7 +69,13 @@ class ConnectionManager:
         self.last_failure_time = 0
         self.circuit_state = CircuitState.CLOSED
 
-    def connect_with_retry(self, connect_func: Callable, *args, **kwargs) -> Any:
+    def connect_with_retry(
+        self,
+        connect_func: Callable,
+        *args,
+        wakeup_event: Optional[threading.Event] = None,
+        **kwargs,
+    ) -> Any:
         """
         Attempt connection with retry logic and circuit breaker.
 
@@ -76,6 +83,7 @@ class ConnectionManager:
             connect_func: Function to call for connection
             *args: Positional arguments for connect_func
             **kwargs: Keyword arguments for connect_func
+            wakeup_event: Optional Event to interrupt backoff sleep (e.g., config changed).
 
         Returns:
             Result of successful connection
@@ -116,7 +124,19 @@ class ConnectionManager:
                     f"Retrying in {delay:.1f}s"
                 )
 
-                time.sleep(delay)
+                # Sleep in short increments so external events can wake us.
+                if wakeup_event is None:
+                    time.sleep(delay)
+                else:
+                    end = time.monotonic() + max(0.0, float(delay))
+                    while True:
+                        if wakeup_event.is_set():
+                            wakeup_event.clear()
+                            break
+                        remaining = end - time.monotonic()
+                        if remaining <= 0:
+                            break
+                        time.sleep(min(0.25, remaining))
 
         raise Exception(f"Failed to connect after {self.max_retries} attempts")
 

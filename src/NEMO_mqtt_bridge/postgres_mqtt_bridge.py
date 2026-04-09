@@ -181,6 +181,8 @@ class PostgresMQTTBridge:
         self._mqtt_config_fingerprint = None
         self._bridge_stop_done = False
         self._last_heartbeat_monotonic = 0.0
+        # Interrupt backoff sleep when config changes (notify/config poll).
+        self._mqtt_wakeup_event = threading.Event()
 
         self.mqtt_connection_mgr = None
         self.pg_connection_mgr = ConnectionManager(
@@ -326,7 +328,7 @@ class PostgresMQTTBridge:
                     pass
                 self.pg_conn = None
 
-    def _initialize_mqtt(self):
+    def _initialize_mqtt(self, force_immediate_once: bool = False):
         if self.mqtt_client is not None:
             try:
                 self.mqtt_client.loop_stop()
@@ -365,7 +367,24 @@ class PostgresMQTTBridge:
                 self._on_publish,
             )
 
-        self.mqtt_client = self.mqtt_connection_mgr.connect_with_retry(connect)
+        if force_immediate_once:
+            # Bypass backoff/circuit-breaker once: a saved config should cause an
+            # immediate connection attempt, even if we were previously waiting.
+            try:
+                self.mqtt_client = connect()
+            except Exception as e:
+                logger.info(
+                    "%s Immediate reconnect attempt after config change failed: %s",
+                    lifecycle_log_prefix(),
+                    e,
+                )
+                self.mqtt_client = self.mqtt_connection_mgr.connect_with_retry(
+                    connect, wakeup_event=self._mqtt_wakeup_event
+                )
+        else:
+            self.mqtt_client = self.mqtt_connection_mgr.connect_with_retry(
+                connect, wakeup_event=self._mqtt_wakeup_event
+            )
         self.connection_count += 1
         self.last_connect_time = time.time()
         self._last_reconnect_fail_msg = None
@@ -466,6 +485,12 @@ class PostgresMQTTBridge:
             lifecycle_log_prefix(),
             reason,
         )
+        # If we are currently waiting on reconnect backoff, wake immediately so we
+        # can attempt the new settings without waiting out the previous delay.
+        try:
+            self._mqtt_wakeup_event.set()
+        except Exception:
+            pass
         try:
             from django.core.cache import cache
 
@@ -499,7 +524,7 @@ class PostgresMQTTBridge:
         level_name = getattr(self.config, "log_level", None) or "INFO"
         logger.setLevel(getattr(logging, level_name.upper(), logging.INFO))
         try:
-            self._initialize_mqtt()
+            self._initialize_mqtt(force_immediate_once=True)
         except Exception as e:
             logger.error("MQTT reconnect after config reload failed: %s", e)
             return False

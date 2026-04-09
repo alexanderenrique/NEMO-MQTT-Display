@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.4] - 2026-04-09
+
+- **UI: bridge status responsiveness**: MQTT customization / monitor UI reflects bridge connectivity changes promptly (including config-save triggered reconnect flows).
+- **Instant connection attempt on config change**: When MQTT configuration is saved and the bridge is currently waiting in reconnect backoff, the backoff wait is interrupted and the bridge makes an immediate reconnect attempt once, then continues normal exponential backoff if it still cannot connect.
+
 ## [2.2.3] - 2026-04-08
 
 ### Subprocess bridge spawn from Django (default on)
@@ -10,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - **`NEMO_MQTT_BRIDGE_SPAWN_USE_SUPERVISOR`:** **On by default** for the spawn path: runs **`bridge_supervisor`** instead of **`postgres_mqtt_bridge`** directly. Set to **`0`** / **`false`** / **`no`** / **`off`** to spawn the plain bridge module. Passes `--auto` / `--db-health` when matching env flags.
 - **CLI skip:** No spawn during listed `manage.py` subcommands (`migrate`, `test`, `collectstatic`, `shell`, …) or when **`NEMO_MQTT_BRIDGE_SPAWN_SKIP=1`**. **`tests/test_settings.py`** sets **`NEMO_MQTT_BRIDGE_SPAWN_SKIP`** and **`NEMO_MQTT_BRIDGE_SPAWN_SUBPROCESS=0`** by default so pytest does not start a real bridge.
 - **`process_lock`:** New **`read_bridge_lock_pid()`** and **`bridge_process_running()`** helpers for spawn logic.
+
 
 ## [2.2.1] - 2026-04-08
 
