@@ -32,9 +32,9 @@ The `test` option runs `manage.py test_mqtt_api` if that management command exis
 - **`db_checker.py`** - PostgreSQL queue checker
 - **`run_monitor.py`** - Runner with venv detection
 
-## Web monitor
+## Web status (JSON)
 
-The plugin's web dashboard at **`/mqtt/mqtt_monitor/`** shows bridge status, queue samples, optional debug tables, and polls **`/mqtt_bridge_status/`** for live heartbeat and diagnostics. MQTT broker settings are edited on the MQTT **customization** page. (The live event stream/feed has been disabled.)
+Bridge connection, heartbeat, reload metadata, queue summary, and safe config metadata are returned as **JSON** from **`mqtt_bridge_status/`** (login required). With `path("mqtt/", include(...))` the URL is **`/mqtt/mqtt_bridge_status/`**. The old **`mqtt_monitor/`** path **redirects** to that JSON endpoint. MQTT broker settings are edited on the MQTT **customization** page. For local queue/MQTT inspection, use the CLI tools above.
 
 ## Bridge configuration reload
 

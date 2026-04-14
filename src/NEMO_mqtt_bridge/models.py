@@ -185,7 +185,7 @@ class MQTTEventQueue(models.Model):
 
 
 class MQTTBridgeStatus(models.Model):
-    """Bridge connection status for the monitor page (single row)."""
+    """Bridge connection status for the JSON status API (single row)."""
 
     key = models.CharField(
         max_length=20,

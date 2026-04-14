@@ -142,21 +142,22 @@ Adjust image names, env (secrets, `DATABASE_URL` / Django DB vars), and networks
 
 ### Plugin URLs
 
-The plugin exposes one URL:
-
 | URL | Purpose |
 |-----|---------|
-| `/mqtt_monitor/` | Web dashboard (event feed disabled) |
+| `/mqtt_bridge_status/` | **JSON** bridge status (connection, heartbeat, diagnostics, queue summary, config metadata). Login required. |
+| `/mqtt_monitor/` | **Permanent redirect** (301) to `/mqtt_bridge_status/` for old bookmarks. Login required before redirect. |
 
 **Where to find them** depends on how NEMO loads the plugin:
 
-- **Docker / pip-installed NEMO:** NEMO auto-includes URLs from apps whose names start with `NEMO`. The plugin is mounted at the root, so use **`/mqtt_monitor/`**. No manual URL config needed.
-- **Source install with `--write-urls`:** If you add `path("mqtt/", include("NEMO_mqtt_bridge.urls"))` to `NEMO/urls.py`, the URL is under `/mqtt/`: **`/mqtt/mqtt_monitor/`**.
+- **Docker / pip-installed NEMO:** The app is often mounted at the site root, so use **`/mqtt_bridge_status/`** (and **`/mqtt_monitor/`** redirects there).
+- **Source install with `--write-urls`:** If you add `path("mqtt/", include("NEMO_mqtt_bridge.urls"))` to `NEMO/urls.py`, paths are under **`/mqtt/`**: e.g. **`/mqtt/mqtt_bridge_status/`**, **`/mqtt/mqtt_monitor/`** → redirect.
 
-Both paths require login. If you get a 404, check which URL scheme your NEMO uses (auto-include vs manual).
+All of these require login. If you get a 404, check which URL scheme your NEMO uses (auto-include vs manual).
+
+**Response fields (summary):** `status` and `updated_at` describe the `MQTTBridgeStatus` DB row (broker connection as recorded by the bridge). `bridge_status_row_updated_at` is the same timestamp, named explicitly. `last_heartbeat` is the bridge consumption-loop heartbeat. `bridge_last_reload` is when the *bridge process* last reapplied configuration from the database (`at` + `reason`); this is **not** the same as saving the MQTT customization form. `mqtt_configuration` is the current `MQTTConfiguration` row (`updated_at` = last save in NEMO). `applied_mqtt_configuration` mirrors `diagnostics.applied_fingerprint` (the config version last applied by the bridge). `queue` has `pending_count` and optional pending timestamps. `package_version` is the installed `nemo-mqtt-bridge` version (distribution metadata when available); `plugin_version` is the same string (alias). `diagnostics` never includes `applied_config_snapshot`. See `mqtt_bridge_status_payload()` in `utils.py` for the full docstring.
 
 ---
 
 - **Robustness roadmap:** Phases 1–5 in [docs/ROBUSTNESS_PLAN.md](docs/ROBUSTNESS_PLAN.md) are implemented in 2.1.5 (idle bridge until MQTT enabled, processed-only-on-publish, LISTEN reconnect, `close_old_connections`, `NEMO_MQTT_BRIDGE_RUN_IN_DJANGO`). **2.2.0** changes the default so the bridge does not run in Django unless opted in. Phase 6 items in the robustness doc remain optional.
-- **Monitoring:** Connection status at `/mqtt_monitor/` (Docker) or `/mqtt/mqtt_monitor/` (manual URL include); CLI tools in `NEMO_mqtt_bridge.monitoring` (see `src/NEMO_mqtt_bridge/monitoring/README.md`).
+- **Monitoring:** Connection and diagnostics JSON at `/mqtt_bridge_status/` (or `/mqtt/mqtt_bridge_status/` when under `mqtt/`); CLI tools in `NEMO_mqtt_bridge.monitoring` (see `src/NEMO_mqtt_bridge/monitoring/README.md`).
 - **License:** MIT. [Issues](https://github.com/alexanderenrique/NEMO-MQTT-Plugin/issues) · [Discussions](https://github.com/alexanderenrique/NEMO-MQTT-Plugin/discussions)

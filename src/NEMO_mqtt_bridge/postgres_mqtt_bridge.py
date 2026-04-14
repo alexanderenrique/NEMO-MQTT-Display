@@ -134,7 +134,7 @@ def _get_pg_connection_params():
 
 
 def _write_bridge_status(status: str):
-    """Update bridge status in DB for monitor page."""
+    """Update bridge status in DB for mqtt_bridge_status JSON."""
     try:
         MQTTBridgeStatus.objects.update_or_create(
             key="default",
@@ -382,11 +382,6 @@ class PostgresMQTTBridge:
             {
                 "last_reload_reason": reason,
                 "last_reload_at": timezone.now().isoformat(),
-                "applied_config_snapshot": (
-                    mqtt_config_safe_snapshot(self.config)
-                    if (self.config and self.config.enabled)
-                    else None
-                ),
                 "applied_fingerprint": mqtt_config_fingerprint_serial(
                     self._mqtt_config_fingerprint
                 ),

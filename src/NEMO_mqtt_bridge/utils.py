@@ -5,14 +5,37 @@ Utility functions for MQTT plugin.
 import json
 import logging
 from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING
+
 from django.conf import settings
-from django.utils import timezone
 from django.http import HttpResponse
+from django.utils import timezone
 
 if TYPE_CHECKING:
     from .models import MQTTConfiguration
 
 logger = logging.getLogger(__name__)
+
+_NEMO_MQTT_BRIDGE_DIST_NAME = "nemo-mqtt-bridge"
+
+
+def nemo_mqtt_bridge_package_version() -> Optional[str]:
+    """
+    Installed distribution version (PyPI / wheel metadata), else ``__version__`` from this package.
+    """
+    try:
+        from importlib.metadata import PackageNotFoundError, version
+
+        return version(_NEMO_MQTT_BRIDGE_DIST_NAME)
+    except PackageNotFoundError:
+        pass
+    except Exception:
+        logger.debug("nemo_mqtt_bridge_package_version: metadata lookup failed", exc_info=True)
+    try:
+        from . import __version__ as _ver
+
+        return str(_ver)
+    except Exception:
+        return None
 
 
 def mqtt_config_safe_snapshot(config: Optional["MQTTConfiguration"]) -> Optional[Dict[str, Any]]:
@@ -78,17 +101,53 @@ def read_mqtt_bridge_diagnostics() -> Dict[str, Any]:
 
 def mqtt_bridge_status_payload() -> Dict[str, Any]:
     """
-    Same fields as the mqtt_bridge_status JSON view: bridge row + diagnostics.
-    Used by the view and by the monitor page for SSR and polling consistency.
+    Build the JSON body for ``GET .../mqtt_bridge_status/`` (login required).
+
+    **Times (UTC)** — Every ISO-8601 timestamp in this payload (top-level fields,
+    **diagnostics**, **bridge_last_reload.at**, **mqtt_configuration.updated_at**,
+    **applied_mqtt_configuration.updated_at**, and **queue** row times) is in **UTC**
+    (typically with a ``+00:00`` or ``Z`` suffix from ``isoformat()``). Clients may
+    convert to a local timezone for display.
+
+    **status** — Broker connection as stored on ``MQTTBridgeStatus``
+    (``connected`` / ``disconnected`` / null).
+
+    **updated_at** — ISO time when the ``MQTTBridgeStatus`` row was last updated.
+    Same value as **bridge_status_row_updated_at** (alias for clarity).
+
+    **last_heartbeat** — ISO time of the bridge consumption-loop heartbeat, if any.
+
+    **diagnostics** — Bridge-published fields (reload, fingerprint, last error, etc.).
+    Never includes ``applied_config_snapshot`` (removed for security).
+
+    **bridge_last_reload** — ``{"at", "reason"}`` when the *bridge process* last
+    reapplied configuration from the database. This is **not** the same event as
+    saving the MQTT customization form (see **mqtt_configuration.updated_at**).
+
+    **mqtt_configuration** — Current ``MQTTConfiguration`` row: ``id``, ``updated_at``,
+    ``enabled``, ``use_hmac``. The ``updated_at`` here is when NEMO last saved the
+    row in the database.
+
+    **applied_mqtt_configuration** — ``id`` and ``updated_at`` of the configuration
+    version the bridge last applied (mirrors ``diagnostics.applied_fingerprint``).
+
+    **queue** — ``pending_count`` and optional oldest/newest pending row timestamps.
+
+    **package_version** — Installed ``nemo-mqtt-bridge`` distribution version from package metadata
+    when available, otherwise the in-module ``__version__``.
+
+    **plugin_version** — Same string as **package_version** (kept for backward compatibility).
     """
     status = None
     updated_at = None
     last_heartbeat = None
     diagnostics: Dict[str, Any] = {}
     try:
-        diagnostics = read_mqtt_bridge_diagnostics()
+        diagnostics = dict(read_mqtt_bridge_diagnostics())
+        diagnostics.pop("applied_config_snapshot", None)
     except Exception:
-        pass
+        diagnostics = {}
+
     try:
         from .models import MQTTBridgeStatus
 
@@ -100,11 +159,74 @@ def mqtt_bridge_status_payload() -> Dict[str, Any]:
                 last_heartbeat = row.last_heartbeat.isoformat()
     except Exception:
         pass
+
+    bridge_last_reload = {
+        "at": diagnostics.get("last_reload_at"),
+        "reason": diagnostics.get("last_reload_reason"),
+    }
+
+    fp = diagnostics.get("applied_fingerprint")
+    if isinstance(fp, dict):
+        applied_mqtt_configuration = {
+            "id": fp.get("id"),
+            "updated_at": fp.get("updated_at"),
+        }
+    else:
+        applied_mqtt_configuration = None
+
+    mqtt_configuration = None
+    queue_block: Dict[str, Any] = {
+        "pending_count": 0,
+        "oldest_pending_created_at": None,
+        "newest_pending_created_at": None,
+    }
+    try:
+        from .models import MQTTConfiguration, MQTTEventQueue
+
+        config = MQTTConfiguration.objects.order_by("pk").first()
+        if config is not None:
+            mqtt_configuration = {
+                "id": config.pk,
+                "updated_at": config.updated_at.isoformat()
+                if config.updated_at
+                else None,
+                "enabled": bool(config.enabled),
+                "use_hmac": bool(getattr(config, "use_hmac", False)),
+            }
+        pending = MQTTEventQueue.objects.filter(processed=False)
+        queue_block["pending_count"] = pending.count()
+        oldest = (
+            pending.order_by("created_at")
+            .values_list("created_at", flat=True)
+            .first()
+        )
+        newest = (
+            pending.order_by("-created_at")
+            .values_list("created_at", flat=True)
+            .first()
+        )
+        if oldest is not None:
+            queue_block["oldest_pending_created_at"] = oldest.isoformat()
+        if newest is not None:
+            queue_block["newest_pending_created_at"] = newest.isoformat()
+    except Exception:
+        pass
+
+    package_version = nemo_mqtt_bridge_package_version()
+    plugin_version = package_version
+
     return {
         "status": status,
         "updated_at": updated_at,
+        "bridge_status_row_updated_at": updated_at,
         "last_heartbeat": last_heartbeat,
         "diagnostics": diagnostics,
+        "bridge_last_reload": bridge_last_reload,
+        "mqtt_configuration": mqtt_configuration,
+        "applied_mqtt_configuration": applied_mqtt_configuration,
+        "queue": queue_block,
+        "package_version": package_version,
+        "plugin_version": plugin_version,
     }
 
 
@@ -114,6 +236,7 @@ def update_mqtt_bridge_diagnostics(partial: Dict[str, Any]) -> None:
 
     data = read_mqtt_bridge_diagnostics()
     data.update(partial)
+    data.pop("applied_config_snapshot", None)
     data["diagnostics_updated_at"] = timezone.now().isoformat()
     cache.set(
         MQTT_BRIDGE_DIAGNOSTICS_CACHE_KEY,

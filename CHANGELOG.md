@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.3.3] - 2026-04-10
+
+### Removed
+
+- **MQTT monitor HTML dashboard** (`mqtt_monitor/` page template and view). Operational status is **JSON-only** at **`mqtt_bridge_status/`**.
+
+### Changed
+
+- **Legacy `/mqtt_monitor/`** now returns **301 Permanent Redirect** to **`mqtt_bridge_status/`** (both use the **standard NEMO** session login; there is no separate login for these URLs).
+- **`GET mqtt_bridge_status/`** payload extended with **`bridge_status_row_updated_at`** (alias of `updated_at`), **`bridge_last_reload`** (`at` + `reason`), **`mqtt_configuration`** (current row: `id`, `updated_at`, `enabled`, `use_hmac`), **`applied_mqtt_configuration`** (mirrors `diagnostics.applied_fingerprint`), **`queue`** (`pending_count`, oldest/newest pending timestamps), **`package_version`** (installed `nemo-mqtt-bridge` from distribution metadata, else `__version__`), and **`plugin_version`** (same string, alias). Docstring in **`mqtt_bridge_status_payload()`** describes each field.
+- **`diagnostics.applied_config_snapshot`** is **no longer written or returned** (scrubbed on diagnostics update and stripped when building the JSON) to avoid exposing broker identity fields in the API.
+
 ## [2.3.2] - 2026-04-09
 
 ### Changed
@@ -178,7 +190,7 @@ All notable changes to this project will be documented in this file.
 - Initial public release of the NEMO_mqtt_bridge plugin.
 - Full MQTT integration for NEMO tool, area, reservation, and usage events.
 - Redis–MQTT bridge architecture for reliable event delivery.
-- Web-based monitoring dashboard at `/mqtt/mqtt_monitor/`.
+- Web-based MQTT status JSON at `/mqtt_bridge_status/` (see current README).
 - Comprehensive configuration options via Django admin and customization UI.
 - AUTO and EXTERNAL service modes for development and production.
 - HMAC-SHA256 message authentication for payload integrity and authenticity.

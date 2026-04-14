@@ -69,7 +69,7 @@ def test_queue_and_mqtt():
     logger.info("Test completed!")
     logger.info("Next steps:")
     logger.info("1. Make sure the bridge is running: python -m NEMO_mqtt_bridge.postgres_mqtt_bridge")
-    logger.info("2. Check the web monitor page at /mqtt/mqtt_monitor/")
+    logger.info("2. Check bridge status JSON at /mqtt/mqtt_bridge_status/")
     logger.info("3. Enable/disable a tool in NEMO to generate real messages")
 
 
